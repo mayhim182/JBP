@@ -13,10 +13,10 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class UserResponse {
+public class AuthResponse {
 
-    private Long id;
-    private String name;
-    private String email;
-    private Set<String> roles;
+    private String accessToken;
+    private String tokenType;
+    private long expiresIn;
+    private UserResponse user;
 }

@@ -1,6 +1,7 @@
 package com.jbp.service;
 
 import com.jbp.dto.UserRequest;
+import com.jbp.dto.UserUpdateRequest;
 import com.jbp.dto.UserResponse;
 
 import java.util.List;
@@ -13,7 +14,7 @@ public interface UserService {
 
     List<UserResponse> getAllUsers();
 
-    UserResponse updateUser(Long id, UserRequest request);
+    UserResponse updateUser(Long id, UserUpdateRequest request);
 
     void deleteUser(Long id);
 }
