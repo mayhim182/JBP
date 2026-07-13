@@ -39,14 +39,19 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("Email already exists: " + request.getEmail());
         }
 
-        Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
-                .orElseThrow(() -> new IllegalStateException("Default role ROLE_USER not found"));
+        // Admin chooses the role (CANDIDATE or RECRUITER); defaults to CANDIDATE if omitted.
+        // ADMIN cannot be assigned here — admins are created only via the seeder.
+        RoleName roleName = (request.getRole() == null || request.getRole().isBlank())
+                ? RoleName.ROLE_CANDIDATE
+                : RoleName.fromAssignable(request.getRole());
+        Role role = roleRepository.findByName(roleName)
+                .orElseThrow(() -> new IllegalStateException("Role not found: " + roleName));
 
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .roles(Set.of(userRole))
+                .roles(Set.of(role))
                 .enabled(true)
                 .build();
 
