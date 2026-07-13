@@ -26,4 +26,9 @@ public class RegisterRequest {
     @NotBlank(message = "Password is required")
     @Size(min = 6, message = "Password must be at least 6 characters")
     private String password;
+
+    // Which kind of account to create: "CANDIDATE" (job-seeker) or "RECRUITER" (hirer).
+    // ADMIN cannot be self-registered; it is created only via the seeder.
+    @NotBlank(message = "Role is required (CANDIDATE or RECRUITER)")
+    private String role;
 }
