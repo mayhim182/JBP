@@ -55,10 +55,14 @@ public class CompanyServiceImpl implements CompanyService {
     @Override
     public CompanyResponse getCurrentRecruiterCompany() {
         Long recruiterId = currentUserProvider.getCurrentUserId();
-        Company company = companyRepository.findByOwnerId(recruiterId)
+        return toResponse(getCompanyEntityForRecruiter(recruiterId));
+    }
+
+    @Override
+    public Company getCompanyEntityForRecruiter(Long recruiterId) {
+        return companyRepository.findByOwnerId(recruiterId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No company found for recruiter id: " + recruiterId));
-        return toResponse(company);
     }
 
     @Override
