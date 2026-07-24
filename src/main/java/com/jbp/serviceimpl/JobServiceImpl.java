@@ -88,11 +88,11 @@ public class JobServiceImpl implements JobService {
             throw new AccessDeniedException("Your company must be verified before publishing jobs");
         }
 
-        // Auto-publish: skips PENDING_MODERATION until admin moderation is added (Epic 9).
-        job.setStatus(JobStatus.PUBLISHED);
-        Job published = jobRepository.save(job);
-        log.info("Job published with id={} by recruiter {}", published.getId(), recruiterId);
-        return jobMapper.toResponse(published);
+        // Submit for admin moderation; becomes PUBLISHED only after admin approval (Epic 9).
+        job.setStatus(JobStatus.PENDING_MODERATION);
+        Job submitted = jobRepository.save(job);
+        log.info("Job id={} submitted for moderation by recruiter {}", submitted.getId(), recruiterId);
+        return jobMapper.toResponse(submitted);
     }
 
     @Override

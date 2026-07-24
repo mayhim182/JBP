@@ -46,7 +46,7 @@ public class Company {
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private VerificationStatus status = VerificationStatus.VERIFIED;
+    private VerificationStatus status = VerificationStatus.PENDING;
 
     // The recruiter who owns this company. One recruiter owns exactly one company
     // (enforced by the unique constraint on owner_id).
