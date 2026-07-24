@@ -15,8 +15,10 @@ public interface JobRepository extends JpaRepository<Job, Long> {
     // All jobs owned by a recruiter, resolved via job -> company -> owner.
     List<Job> findByCompany_Owner_Id(Long ownerId);
 
-    // Jobs in a given lifecycle status (used by candidate matching for PUBLISHED jobs).
+    // Jobs in a given lifecycle status (used by candidate matching + admin moderation queue).
     List<Job> findByStatus(JobStatus status);
+
+    long countByStatus(JobStatus status);
 
     /**
      * Searches PUBLISHED jobs. Keyword {@code q} is matched with MySQL FULLTEXT on

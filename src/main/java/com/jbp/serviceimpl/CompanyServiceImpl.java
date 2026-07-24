@@ -4,6 +4,7 @@ import com.jbp.dto.CompanyRequest;
 import com.jbp.dto.CompanyResponse;
 import com.jbp.exception.ConflictException;
 import com.jbp.exception.ResourceNotFoundException;
+import com.jbp.mapper.CompanyMapper;
 import com.jbp.model.Company;
 import com.jbp.model.User;
 import com.jbp.model.VerificationStatus;
@@ -26,6 +27,7 @@ public class CompanyServiceImpl implements CompanyService {
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final CompanyMapper companyMapper;
 
     @Override
     @Transactional
@@ -43,19 +45,19 @@ public class CompanyServiceImpl implements CompanyService {
                 .website(request.getWebsite())
                 .logo(request.getLogo())
                 .location(request.getLocation())
-                .status(VerificationStatus.VERIFIED) // auto-verified for now; admin approval added later
+                .status(VerificationStatus.PENDING) // awaits admin verification (Epic 9)
                 .owner(owner)
                 .build();
 
         Company saved = companyRepository.save(company);
-        log.info("Company created with id={} for recruiter {}", saved.getId(), recruiterId);
-        return toResponse(saved);
+        log.info("Company created with id={} for recruiter {} (PENDING)", saved.getId(), recruiterId);
+        return companyMapper.toResponse(saved);
     }
 
     @Override
     public CompanyResponse getCurrentRecruiterCompany() {
         Long recruiterId = currentUserProvider.getCurrentUserId();
-        return toResponse(getCompanyEntityForRecruiter(recruiterId));
+        return companyMapper.toResponse(getCompanyEntityForRecruiter(recruiterId));
     }
 
     @Override
@@ -67,7 +69,7 @@ public class CompanyServiceImpl implements CompanyService {
 
     @Override
     public CompanyResponse getCompanyById(Long id) {
-        return toResponse(findCompanyOrThrow(id));
+        return companyMapper.toResponse(findCompanyOrThrow(id));
     }
 
     @Override
@@ -84,7 +86,7 @@ public class CompanyServiceImpl implements CompanyService {
 
         Company updated = companyRepository.save(company);
         log.info("Company updated with id={}", updated.getId());
-        return toResponse(updated);
+        return companyMapper.toResponse(updated);
     }
 
     @Override
@@ -111,19 +113,5 @@ public class CompanyServiceImpl implements CompanyService {
     private User findUserOrThrow(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
-    }
-
-    private CompanyResponse toResponse(Company company) {
-        return CompanyResponse.builder()
-                .id(company.getId())
-                .name(company.getName())
-                .description(company.getDescription())
-                .website(company.getWebsite())
-                .logo(company.getLogo())
-                .location(company.getLocation())
-                .status(company.getStatus())
-                .verified(company.getStatus() == VerificationStatus.VERIFIED)
-                .ownerId(company.getOwner().getId())
-                .build();
     }
 }

@@ -5,5 +5,7 @@ package com.jbp.model;
  * plug in here as their source events start being published.
  */
 public enum NotificationType {
-    APPLICATION_STATUS_CHANGED
+    APPLICATION_STATUS_CHANGED,
+    COMPANY_VERIFICATION,
+    JOB_MODERATION
 }
