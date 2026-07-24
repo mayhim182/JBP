@@ -4,6 +4,8 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -43,6 +45,10 @@ public class CandidateProfile {
     private String headline;
 
     private String location;
+
+    // Optional self-declared seniority; used by the matching engine.
+    @Enumerated(EnumType.STRING)
+    private SeniorityLevel seniority;
 
     @Builder.Default
     @ElementCollection

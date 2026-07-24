@@ -33,4 +33,8 @@ public class ApplicationResponse {
     // Populated only in the recruiter view (kept out of the candidate's tracker).
     private String recruiterNotes;
     private Integer rating;
+
+    // Populated only in the ranked applicant list (recruiter surface of matching).
+    private Integer matchScore;
+    private String matchReason;
 }
