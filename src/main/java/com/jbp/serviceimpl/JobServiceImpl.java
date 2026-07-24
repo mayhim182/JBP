@@ -4,10 +4,10 @@ import com.jbp.dto.JobRequest;
 import com.jbp.dto.JobResponse;
 import com.jbp.exception.ConflictException;
 import com.jbp.exception.ResourceNotFoundException;
+import com.jbp.mapper.JobMapper;
 import com.jbp.model.Company;
 import com.jbp.model.Job;
 import com.jbp.model.JobStatus;
-import com.jbp.model.VerificationStatus;
 import com.jbp.repository.JobRepository;
 import com.jbp.security.CurrentUserProvider;
 import com.jbp.service.CompanyService;
@@ -31,6 +31,7 @@ public class JobServiceImpl implements JobService {
     private final JobRepository jobRepository;
     private final CompanyService companyService;
     private final CurrentUserProvider currentUserProvider;
+    private final JobMapper jobMapper;
 
     @Override
     @Transactional
@@ -47,7 +48,7 @@ public class JobServiceImpl implements JobService {
         Job saved = jobRepository.save(job);
         log.info("Job created with id={} under company {} by recruiter {}",
                 saved.getId(), company.getId(), recruiterId);
-        return toResponse(saved);
+        return jobMapper.toResponse(saved);
     }
 
     @Override
@@ -61,7 +62,7 @@ public class JobServiceImpl implements JobService {
 
         Job updated = jobRepository.save(job);
         log.info("Job updated with id={}", updated.getId());
-        return toResponse(updated);
+        return jobMapper.toResponse(updated);
     }
 
     @Override
@@ -91,7 +92,7 @@ public class JobServiceImpl implements JobService {
         job.setStatus(JobStatus.PUBLISHED);
         Job published = jobRepository.save(job);
         log.info("Job published with id={} by recruiter {}", published.getId(), recruiterId);
-        return toResponse(published);
+        return jobMapper.toResponse(published);
     }
 
     @Override
@@ -104,7 +105,7 @@ public class JobServiceImpl implements JobService {
         job.setStatus(JobStatus.CLOSED);
         Job closed = jobRepository.save(job);
         log.info("Job closed with id={}", closed.getId());
-        return toResponse(closed);
+        return jobMapper.toResponse(closed);
     }
 
     @Override
@@ -130,7 +131,7 @@ public class JobServiceImpl implements JobService {
 
         Job saved = jobRepository.save(copy);
         log.info("Job cloned from id={} into new draft id={}", id, saved.getId());
-        return toResponse(saved);
+        return jobMapper.toResponse(saved);
     }
 
     @Override
@@ -140,14 +141,14 @@ public class JobServiceImpl implements JobService {
             // Hide non-published jobs from the public entirely.
             throw new ResourceNotFoundException("Job not found with id: " + id);
         }
-        return toResponse(job);
+        return jobMapper.toResponse(job);
     }
 
     @Override
     public List<JobResponse> getMyJobs() {
         Long recruiterId = currentUserProvider.getCurrentUserId();
         return jobRepository.findByCompany_Owner_Id(recruiterId).stream()
-                .map(this::toResponse)
+                .map(jobMapper::toResponse)
                 .toList();
     }
 
@@ -184,26 +185,5 @@ public class JobServiceImpl implements JobService {
     private Job findJobOrThrow(Long id) {
         return jobRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Job not found with id: " + id));
-    }
-
-    private JobResponse toResponse(Job job) {
-        Company company = job.getCompany();
-        return JobResponse.builder()
-                .id(job.getId())
-                .title(job.getTitle())
-                .description(job.getDescription())
-                .skills(new HashSet<>(job.getSkills()))
-                .location(job.getLocation())
-                .remote(job.isRemote())
-                .type(job.getType())
-                .seniority(job.getSeniority())
-                .salaryMin(job.getSalaryMin())
-                .salaryMax(job.getSalaryMax())
-                .screeningQuestions(new ArrayList<>(job.getScreeningQuestions()))
-                .status(job.getStatus())
-                .companyId(company.getId())
-                .companyName(company.getName())
-                .companyVerified(company.getStatus() == VerificationStatus.VERIFIED)
-                .build();
     }
 }
