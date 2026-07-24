@@ -8,10 +8,13 @@ import com.jbp.exception.ResourceNotFoundException;
 import com.jbp.mapper.ApplicationMapper;
 import com.jbp.model.Application;
 import com.jbp.model.ApplicationStatus;
+import com.jbp.model.CandidateProfile;
 import com.jbp.model.Job;
 import com.jbp.repository.ApplicationRepository;
 import com.jbp.repository.JobRepository;
 import com.jbp.security.CurrentUserProvider;
+import com.jbp.service.CandidateProfileService;
+import com.jbp.service.MatchScorer;
 import com.jbp.service.RecruiterApplicationService;
 import com.jbp.util.ApplicationStageTransitionValidator;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 
 @Slf4j
@@ -37,15 +41,30 @@ public class RecruiterApplicationServiceImpl implements RecruiterApplicationServ
     private final ApplicationMapper applicationMapper;
     private final ApplicationStageTransitionValidator transitionValidator;
     private final ApplicationStatusChangePublisher statusChangePublisher;
+    private final CandidateProfileService candidateProfileService;
+    private final MatchScorer matchScorer;
 
     @Override
     public List<ApplicationResponse> getApplicantsForJob(Long jobId) {
         Job job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("Job not found with id: " + jobId));
         ensureRecruiterOwnsJob(job);
+        // Applicants arrive ranked by match score (best first), not apply-order.
         return applicationRepository.findByJobId(jobId).stream()
-                .map(applicationMapper::toRecruiterResponse)
+                .map(application -> toRankedResponse(application, job))
+                .sorted(Comparator.comparingInt(ApplicationResponse::getMatchScore).reversed())
                 .toList();
+    }
+
+    private ApplicationResponse toRankedResponse(Application application, Job job) {
+        ApplicationResponse response = applicationMapper.toRecruiterResponse(application);
+        CandidateProfile profile = candidateProfileService
+                .findProfileForCandidate(application.getCandidate().getId())
+                .orElseGet(() -> CandidateProfile.builder().build());
+        MatchScorer.MatchResult match = matchScorer.score(profile, job);
+        response.setMatchScore(match.score());
+        response.setMatchReason(match.reason());
+        return response;
     }
 
     @Override

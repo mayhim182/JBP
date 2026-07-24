@@ -1,5 +1,6 @@
 package com.jbp.dto;
 
+import com.jbp.model.SeniorityLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,6 +20,7 @@ public class CandidateProfileResponse {
     private Long id;
     private String headline;
     private String location;
+    private SeniorityLevel seniority;
     private Set<String> skills;
     private Set<String> links;
     private List<ExperienceDto> experiences;

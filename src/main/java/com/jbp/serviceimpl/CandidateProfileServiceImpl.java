@@ -27,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Slf4j
@@ -106,6 +107,11 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
         return getOrCreateProfile(candidateId);
     }
 
+    @Override
+    public Optional<CandidateProfile> findProfileForCandidate(Long candidateId) {
+        return profileRepository.findByUserId(candidateId);
+    }
+
     private CandidateProfile getOrCreateProfile(Long candidateId) {
         return profileRepository.findByUserId(candidateId)
                 .orElseGet(() -> createEmptyProfile(candidateId));
@@ -139,6 +145,7 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
     private void applyRequestToProfile(CandidateProfile profile, CandidateProfileRequest request) {
         profile.setHeadline(request.getHeadline());
         profile.setLocation(request.getLocation());
+        profile.setSeniority(request.getSeniority());
 
         replaceAll(profile.getSkills(), request.getSkills());
         replaceAll(profile.getLinks(), request.getLinks());
@@ -202,6 +209,7 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
                 .id(profile.getId())
                 .headline(profile.getHeadline())
                 .location(profile.getLocation())
+                .seniority(profile.getSeniority())
                 .skills(new HashSet<>(profile.getSkills()))
                 .links(new HashSet<>(profile.getLinks()))
                 .experiences(profile.getExperiences().stream().map(this::toExperienceDto).toList())

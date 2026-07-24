@@ -1,6 +1,7 @@
 package com.jbp.repository;
 
 import com.jbp.model.Job;
+import com.jbp.model.JobStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,6 +14,9 @@ public interface JobRepository extends JpaRepository<Job, Long> {
 
     // All jobs owned by a recruiter, resolved via job -> company -> owner.
     List<Job> findByCompany_Owner_Id(Long ownerId);
+
+    // Jobs in a given lifecycle status (used by candidate matching for PUBLISHED jobs).
+    List<Job> findByStatus(JobStatus status);
 
     /**
      * Searches PUBLISHED jobs. Keyword {@code q} is matched with MySQL FULLTEXT on
