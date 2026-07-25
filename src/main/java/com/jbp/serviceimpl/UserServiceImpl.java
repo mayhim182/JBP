@@ -3,6 +3,7 @@ package com.jbp.serviceimpl;
 import com.jbp.dto.UserRequest;
 import com.jbp.dto.UserUpdateRequest;
 import com.jbp.dto.UserResponse;
+import com.jbp.exception.ConflictException;
 import com.jbp.exception.ResourceNotFoundException;
 import com.jbp.model.Role;
 import com.jbp.model.RoleName;
@@ -36,7 +37,7 @@ public class UserServiceImpl implements UserService {
         log.debug("Checking if email already exists: {}", request.getEmail());
         if (userRepository.existsByEmail(request.getEmail())) {
             log.warn("User creation failed — email already exists: {}", request.getEmail());
-            throw new IllegalArgumentException("Email already exists: " + request.getEmail());
+            throw new ConflictException("Email already exists: " + request.getEmail());
         }
 
         // Admin chooses the role (CANDIDATE or RECRUITER); defaults to CANDIDATE if omitted.
