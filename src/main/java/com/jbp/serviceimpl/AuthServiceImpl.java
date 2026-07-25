@@ -4,6 +4,7 @@ import com.jbp.dto.AuthResponse;
 import com.jbp.dto.LoginRequest;
 import com.jbp.dto.RegisterRequest;
 import com.jbp.dto.UserResponse;
+import com.jbp.exception.ConflictException;
 import com.jbp.model.Role;
 import com.jbp.model.RoleName;
 import com.jbp.model.User;
@@ -40,7 +41,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             log.warn("Registration failed — email already exists: {}", request.getEmail());
-            throw new IllegalArgumentException("Email already exists: " + request.getEmail());
+            throw new ConflictException("Email already exists: " + request.getEmail());
         }
 
         RoleName roleName = RoleName.fromAssignable(request.getRole());
