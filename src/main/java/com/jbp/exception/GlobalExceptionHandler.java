@@ -1,6 +1,7 @@
 package com.jbp.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -35,6 +36,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleConflict(ConflictException ex) {
         log.warn("Conflict: {}", ex.getMessage());
         return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * Backstop for database constraint violations (e.g. the unique index on users.email).
+     * Service-level guards check first and return a specific message, but they are
+     * read-then-write and so can be raced by concurrent requests; without this the loser
+     * would fall through to the catch-all and surface as a 500.
+     * <p>
+     * The cause is logged but not returned — it contains SQL and schema details.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        log.warn("Constraint violation: {}", ex.getMostSpecificCause().getMessage());
+        return buildResponse(HttpStatus.CONFLICT, "That value is already in use");
     }
 
     @ExceptionHandler(BadCredentialsException.class)
