@@ -85,7 +85,11 @@ public class JobServiceImpl implements JobService {
 
         Long recruiterId = currentUserProvider.getCurrentUserId();
         if (!companyService.isRecruiterVerified(recruiterId)) {
-            throw new AccessDeniedException("Your company must be verified before publishing jobs");
+            // Not an authorization failure — the recruiter may publish jobs, but this one
+            // conflicts with the company's current (unverified) state. ConflictException
+            // keeps the reason in the response so the UI can tell them what to do next;
+            // AccessDeniedException is deliberately masked to a generic "Access denied".
+            throw new ConflictException("Your company must be verified before publishing jobs");
         }
 
         // Submit for admin moderation; becomes PUBLISHED only after admin approval (Epic 9).
