@@ -1,8 +1,11 @@
 package com.jbp.controller;
 
+import com.jbp.dto.AuthResponse;
+import com.jbp.dto.EmailChangeRequest;
 import com.jbp.dto.UserRequest;
 import com.jbp.dto.UserUpdateRequest;
 import com.jbp.dto.UserResponse;
+import com.jbp.service.AuthService;
 import com.jbp.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +31,8 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    /** Owns credential verification and token issuance, which the email change needs both of. */
+    private final AuthService authService;
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
@@ -61,6 +66,24 @@ public class UserController {
             @Valid @RequestBody UserUpdateRequest request) {
         log.info("Updating user id={} with email={}", id, request.getEmail());
         return ResponseEntity.ok(userService.updateUser(id, request));
+    }
+
+    /**
+     * Changes the signed-in user's own email, proving identity with their current password, and
+     * returns a fresh token they must store in place of the old one.
+     *
+     * <p>Mounted here rather than under {@code /api/auth} deliberately: {@code SecurityConfig}
+     * declares {@code /api/auth/**} as {@code permitAll}, so an email-change route there would be
+     * reachable without a token, and would stay that way silently if anyone later reordered those
+     * matchers. Under {@code /api/users} it inherits {@code anyRequest().authenticated()} and is
+     * closed by default. No {@code @PreAuthorize} is needed because the operation reads the caller
+     * from the security context and can only ever act on them — there is no id to get wrong.
+     */
+    @PutMapping("/me/email")
+    public ResponseEntity<AuthResponse> changeMyEmail(@Valid @RequestBody EmailChangeRequest request) {
+        // The new address is deliberately absent from this line: it is a credential in flight.
+        log.info("Email change requested by the authenticated user");
+        return ResponseEntity.ok(authService.changeEmail(request));
     }
 
     @DeleteMapping("/{id}")

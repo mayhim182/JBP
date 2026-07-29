@@ -1,10 +1,10 @@
 package com.jbp.serviceimpl;
 
 import com.jbp.dto.AuthResponse;
+import com.jbp.dto.EmailChangeRequest;
 import com.jbp.dto.LoginRequest;
 import com.jbp.dto.RegisterRequest;
 import com.jbp.dto.UserResponse;
-import com.jbp.exception.ConflictException;
 import com.jbp.model.Role;
 import com.jbp.model.RoleName;
 import com.jbp.model.User;
@@ -13,9 +13,11 @@ import com.jbp.repository.UserRepository;
 import com.jbp.security.JwtService;
 import com.jbp.security.UserPrincipal;
 import com.jbp.service.AuthService;
+import com.jbp.util.UserEmailGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,19 +32,19 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
+    private static final String BEARER_TOKEN_TYPE = "Bearer";
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final UserEmailGuard userEmailGuard;
 
     @Override
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            log.warn("Registration failed — email already exists: {}", request.getEmail());
-            throw new ConflictException("Email already exists: " + request.getEmail());
-        }
+        userEmailGuard.ensureAvailable(request.getEmail());
 
         RoleName roleName = RoleName.fromAssignable(request.getRole());
         Role role = roleRepository.findByName(roleName)
@@ -58,45 +60,77 @@ public class AuthServiceImpl implements AuthService {
 
         User saved = userRepository.save(user);
         log.info("User registered with id={}, email={}", saved.getId(), saved.getEmail());
-
-        UserPrincipal principal = new UserPrincipal(saved);
-        return buildAuthResponse(principal);
+        return buildAuthResponse(saved);
     }
 
     @Override
     public AuthResponse login(LoginRequest request) {
         log.debug("Login attempt for email={}", request.getEmail());
 
-        AuthenticationManager authManager = authenticationManager;
-        UsernamePasswordAuthenticationToken authToken =
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
-
-        authManager.authenticate(authToken);
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
 
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
 
-        UserPrincipal principal = new UserPrincipal(user);
         log.info("User logged in with id={}, email={}", user.getId(), user.getEmail());
-        return buildAuthResponse(principal);
+        return buildAuthResponse(user);
     }
 
     @Override
     public UserResponse getCurrentUser() {
-        UserPrincipal principal = getAuthenticatedPrincipal();
-        User user = userRepository.findByEmail(principal.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        return toUserResponse(user);
+        return toUserResponse(findAuthenticatedUser());
     }
 
-    private AuthResponse buildAuthResponse(UserPrincipal principal) {
-        String token = jwtService.generateToken(principal);
+    @Override
+    @Transactional
+    public AuthResponse changeEmail(EmailChangeRequest request) {
+        User user = findAuthenticatedUser();
+
+        /*
+         * Password first, and a failure returns immediately. Checking availability first would let
+         * anyone holding a session probe which addresses are registered without ever proving who
+         * they are; after a correct password the caller has already proved that.
+         */
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            log.warn("Email change rejected for user id={} — current password did not match", user.getId());
+            throw new BadCredentialsException("Current password is incorrect");
+        }
+
+        String newEmail = request.getNewEmail().trim();
+        if (!newEmail.equalsIgnoreCase(user.getEmail())) {
+            userEmailGuard.ensureAvailable(newEmail);
+            user.setEmail(newEmail);
+            userRepository.save(user);
+            log.info("Email changed for user id={}", user.getId());
+        }
+
+        /*
+         * A fresh token even when the address did not actually change, so the caller has one
+         * response shape to handle. When it did change the reissue is mandatory: JwtService puts the
+         * email in the token's subject and JwtAuthenticationFilter resolves the user by it, so the
+         * token the caller sent with this very request no longer names anybody.
+         */
+        return buildAuthResponse(user);
+    }
+
+    /**
+     * Takes the {@link User} rather than re-reading it by email, which also removes the redundant
+     * lookup register and login used to perform after they already had the entity in hand.
+     */
+    private AuthResponse buildAuthResponse(User user) {
         return AuthResponse.builder()
-                .accessToken(token)
-                .tokenType("Bearer")
+                .accessToken(jwtService.generateToken(new UserPrincipal(user)))
+                .tokenType(BEARER_TOKEN_TYPE)
                 .expiresIn(jwtService.getExpirationMs())
-                .user(toUserResponse(userRepository.findByEmail(principal.getEmail()).orElseThrow()))
+                .user(toUserResponse(user))
                 .build();
+    }
+
+    private User findAuthenticatedUser() {
+        String email = getAuthenticatedPrincipal().getEmail();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalStateException("Authenticated user no longer exists: " + email));
     }
 
     private UserPrincipal getAuthenticatedPrincipal() {
