@@ -20,6 +20,7 @@ public class CandidateProfileResponse {
     private Long id;
     private String headline;
     private String location;
+    private String phone;
     private SeniorityLevel seniority;
     private Set<String> skills;
     private Set<String> links;

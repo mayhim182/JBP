@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -86,6 +87,14 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
                 .suggestedEmail(parsed.email())
                 .suggestedPhone(parsed.phone())
                 .suggestedSkills(parsed.skills())
+                .suggestedHeadline(parsed.headline())
+                .suggestedLocation(parsed.location())
+                .suggestedSeniority(parsed.seniority())
+                .suggestedExperiences(parsed.experiences())
+                .suggestedEducations(parsed.educations())
+                .suggestedProjects(parsed.projects())
+                // Ordered set: links arrive deduplicated, and the profile stores them as a Set.
+                .suggestedLinks(new LinkedHashSet<>(parsed.links()))
                 .build();
     }
 
@@ -145,6 +154,7 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
     private void applyRequestToProfile(CandidateProfile profile, CandidateProfileRequest request) {
         profile.setHeadline(request.getHeadline());
         profile.setLocation(request.getLocation());
+        profile.setPhone(request.getPhone());
         profile.setSeniority(request.getSeniority());
 
         replaceAll(profile.getSkills(), request.getSkills());
@@ -209,6 +219,7 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
                 .id(profile.getId())
                 .headline(profile.getHeadline())
                 .location(profile.getLocation())
+                .phone(profile.getPhone())
                 .seniority(profile.getSeniority())
                 .skills(new HashSet<>(profile.getSkills()))
                 .links(new HashSet<>(profile.getLinks()))

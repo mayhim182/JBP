@@ -3,14 +3,15 @@ package com.jbp.serviceimpl;
 import com.jbp.dto.UserRequest;
 import com.jbp.dto.UserUpdateRequest;
 import com.jbp.dto.UserResponse;
-import com.jbp.exception.ConflictException;
 import com.jbp.exception.ResourceNotFoundException;
 import com.jbp.model.Role;
 import com.jbp.model.RoleName;
 import com.jbp.model.User;
 import com.jbp.repository.RoleRepository;
 import com.jbp.repository.UserRepository;
+import com.jbp.security.CurrentUserProvider;
 import com.jbp.service.UserService;
+import com.jbp.util.UserEmailGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,15 +31,13 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserEmailGuard userEmailGuard;
+    private final CurrentUserProvider currentUserProvider;
 
     @Override
     @Transactional
     public UserResponse createUser(UserRequest request) {
-        log.debug("Checking if email already exists: {}", request.getEmail());
-        if (userRepository.existsByEmail(request.getEmail())) {
-            log.warn("User creation failed — email already exists: {}", request.getEmail());
-            throw new ConflictException("Email already exists: " + request.getEmail());
-        }
+        userEmailGuard.ensureAvailable(request.getEmail());
 
         // Admin chooses the role (CANDIDATE or RECRUITER); defaults to CANDIDATE if omitted.
         // ADMIN cannot be assigned here — admins are created only via the seeder.
@@ -81,16 +80,39 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse updateUser(Long id, UserUpdateRequest request) {
         User user = findUserOrThrow(id);
-        log.debug("Updating user id={}: name='{}' -> '{}', email='{}' -> '{}'",
-                id, user.getName(), request.getName(), user.getEmail(), request.getEmail());
+        String requestedEmail = request.getEmail().trim();
+
+        if (!requestedEmail.equalsIgnoreCase(user.getEmail())) {
+            rejectChangingYourOwnEmailHere(id);
+            userEmailGuard.ensureAvailable(requestedEmail);
+            user.setEmail(requestedEmail);
+        }
+
+        log.debug("Updating user id={}: name='{}' -> '{}'", id, user.getName(), request.getName());
         user.setName(request.getName());
-        user.setEmail(request.getEmail());
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
         }
         User updated = userRepository.save(user);
         log.info("User updated with id={}", updated.getId());
         return toResponse(updated);
+    }
+
+    /**
+     * Changing your *own* sign-in email has to prove it is you, and this endpoint takes no password —
+     * so it is not the route for it. {@code PUT /api/users/me/email} is, and it also returns the fresh
+     * token such a change requires.
+     *
+     * <p>Comparing the target id to the caller's rather than checking for the admin role is what
+     * makes this correct in every case: an administrator editing somebody else legitimately does not
+     * know their password, while an administrator editing their own address is gated exactly like
+     * anyone else. Without this, a stolen token could change the address it signs in with.
+     */
+    private void rejectChangingYourOwnEmailHere(Long targetUserId) {
+        if (targetUserId.equals(currentUserProvider.getCurrentUserId())) {
+            throw new IllegalArgumentException(
+                    "Changing your own email requires your current password — use PUT /api/users/me/email");
+        }
     }
 
     @Override

@@ -46,6 +46,10 @@ public class CandidateProfile {
 
     private String location;
 
+    // Optional contact number. Stored for recruiters to reach the candidate, and deliberately
+    // NOT counted by ProfileCompletenessCalculator — see the comment there.
+    private String phone;
+
     // Optional self-declared seniority; used by the matching engine.
     @Enumerated(EnumType.STRING)
     private SeniorityLevel seniority;

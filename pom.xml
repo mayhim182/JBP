@@ -91,6 +91,18 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.3.0</version>
         </dependency>
+
+        <!--
+            Phone number extraction and validation. Carries numbering-plan metadata for every
+            country, which is the only way to tell a real number from an arbitrary digit run:
+            a regex cannot distinguish an 8-digit local number from a year range.
+            Keep reasonably current - the metadata is the value, and numbering plans change.
+        -->
+        <dependency>
+            <groupId>com.googlecode.libphonenumber</groupId>
+            <artifactId>libphonenumber</artifactId>
+            <version>8.13.50</version>
+        </dependency>
     </dependencies>
 
     <build>

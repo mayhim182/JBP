@@ -36,3 +36,20 @@ build/
 
 ### macOS ###
 .DS_Store
+
+### Secrets and local overrides ###
+.env
+.env.*
+application-local.properties
+application-local.yml
+*.pem
+*.key
+
+### Maven wrapper plugin artifact ###
+${project.build.directory}/
+
+### Stray logs ###
+*.log
+
+
+
