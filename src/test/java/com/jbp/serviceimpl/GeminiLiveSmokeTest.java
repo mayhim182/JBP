@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(properties = {
         "app.ai.enabled=true",
         "app.ai.base-url=https://generativelanguage.googleapis.com/v1beta/openai",
-        "app.ai.model=gemini-3.5-flash-lite",
+        "app.ai.model=gemini-3.1-flash-lite",
         "app.ai.api-key=${GEMINI_API_KEY:}"
 })
 @EnabledIfEnvironmentVariable(named = "JBP_AI_LIVE_TEST", matches = "true")
