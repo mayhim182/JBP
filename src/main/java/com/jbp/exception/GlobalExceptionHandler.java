@@ -52,6 +52,22 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.CONFLICT, "That value is already in use");
     }
 
+    /**
+     * An AI feature that has no non-AI answer, reported as "try later" rather than "you broke
+     * something". Most AI features degrade quietly and never reach here; the ones that cannot —
+     * writing a job description from nothing — throw so the client can show its unavailable state.
+     *
+     * <p>The message is fixed rather than {@code ex.getMessage()}, which can name a provider status
+     * code. That belongs in our logs, not in an API response, and a recruiter is better served by
+     * being told what to do than by a 401 from somebody else's service.
+     */
+    @ExceptionHandler(LlmUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleLlmUnavailable(LlmUnavailableException ex) {
+        log.warn("AI feature unavailable: {}", ex.getMessage());
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE,
+                "AI assist is unavailable right now. Please write this yourself and try again later.");
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
         log.warn("Authentication failed: invalid credentials");

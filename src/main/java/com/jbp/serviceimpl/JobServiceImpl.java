@@ -1,5 +1,8 @@
 package com.jbp.serviceimpl;
 
+import com.jbp.dto.GeneratedJobDescription;
+import com.jbp.dto.JobDescriptionRequest;
+import com.jbp.dto.JobQualityFinding;
 import com.jbp.dto.JobRequest;
 import com.jbp.dto.JobResponse;
 import com.jbp.exception.ConflictException;
@@ -11,7 +14,10 @@ import com.jbp.model.JobStatus;
 import com.jbp.repository.JobRepository;
 import com.jbp.security.CurrentUserProvider;
 import com.jbp.service.CompanyService;
+import com.jbp.service.JobDescriptionGenerator;
+import com.jbp.service.JobQualityChecker;
 import com.jbp.service.JobService;
+import com.jbp.util.JobQualityRules;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
@@ -32,6 +38,57 @@ public class JobServiceImpl implements JobService {
     private final CompanyService companyService;
     private final CurrentUserProvider currentUserProvider;
     private final JobMapper jobMapper;
+    private final JobDescriptionGenerator jobDescriptionGenerator;
+    private final JobQualityRules jobQualityRules;
+    private final JobQualityChecker jobQualityChecker;
+
+    /**
+     * Assembles the brief and delegates. Read-only and unsaved: the recruiter may never insert the
+     * draft, and a generated description that wrote itself into a job would be exactly the silent
+     * overwrite the editor is designed to prevent.
+     *
+     * <p>The company is resolved from the signed-in recruiter, the same way {@link #createJob} does,
+     * so a caller cannot have a draft written against another employer's branding.
+     */
+    @Override
+    public GeneratedJobDescription generateDescription(JobDescriptionRequest request) {
+        Long recruiterId = currentUserProvider.getCurrentUserId();
+        Company company = companyService.getCompanyEntityForRecruiter(recruiterId);
+
+        log.info("Generating a description draft for recruiter {} under company {}",
+                recruiterId, company.getId());
+        return jobDescriptionGenerator.generate(new JobDescriptionGenerator.JobDescriptionBrief(
+                request.getTitle(),
+                request.getSkills(),
+                request.getLocation(),
+                request.isRemote(),
+                request.getType(),
+                request.getSeniority(),
+                company.getName(),
+                company.getDescription()));
+    }
+
+    /**
+     * Both halves load the job and check ownership the same way every other job operation does, then
+     * delegate. Read-only and nothing is written: a finding is a statement about the job as it is,
+     * recomputed each time it is asked for.
+     */
+    @Override
+    public List<JobQualityFinding> checkQualityWithRules(Long jobId) {
+        Job job = findOwnJobOrThrow(jobId);
+        return jobQualityRules.check(job);
+    }
+
+    @Override
+    public List<JobQualityFinding> checkQualityWithAi(Long jobId) {
+        Job job = findOwnJobOrThrow(jobId);
+        return jobQualityChecker.check(new JobQualityChecker.JobQualityBrief(
+                job.getTitle(),
+                job.getDescription(),
+                job.getSkills(),
+                job.getSeniority(),
+                job.getType()));
+    }
 
     @Override
     @Transactional
@@ -184,6 +241,17 @@ public class JobServiceImpl implements JobService {
         if (job.getStatus() != expected) {
             throw new ConflictException(message);
         }
+    }
+
+    /**
+     * Loads a job the current recruiter owns. Extracted because both quality checks need exactly the
+     * find-then-verify pair the mutating operations already perform, and repeating it invites one of
+     * them to be written without the ownership half.
+     */
+    private Job findOwnJobOrThrow(Long id) {
+        Job job = findJobOrThrow(id);
+        ensureCurrentUserOwnsJob(job);
+        return job;
     }
 
     private Job findJobOrThrow(Long id) {
