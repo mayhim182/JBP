@@ -38,5 +38,5 @@ public class JobRequest {
 
     private Integer salaryMax;
 
-    private List<String> screeningQuestions;
+    private List<ScreeningQuestionDto> screeningQuestions;
 }

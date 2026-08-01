@@ -29,7 +29,7 @@ public class JobResponse {
     private SeniorityLevel seniority;
     private Integer salaryMin;
     private Integer salaryMax;
-    private List<String> screeningQuestions;
+    private List<ScreeningQuestionDto> screeningQuestions;
     private JobStatus status;
 
     // Employer info shown alongside the job (includes the "Verified Employer" flag).

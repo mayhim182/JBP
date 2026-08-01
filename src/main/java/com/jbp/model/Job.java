@@ -65,11 +65,11 @@ public class Job {
 
     private Integer salaryMax;
 
+    // The element carries its own column mappings — see ScreeningQuestion.
     @Builder.Default
     @ElementCollection
     @CollectionTable(name = "job_screening_questions", joinColumns = @JoinColumn(name = "job_id"))
-    @Column(name = "question", length = 1000)
-    private List<String> screeningQuestions = new ArrayList<>();
+    private List<ScreeningQuestion> screeningQuestions = new ArrayList<>();
 
     @Builder.Default
     @Enumerated(EnumType.STRING)

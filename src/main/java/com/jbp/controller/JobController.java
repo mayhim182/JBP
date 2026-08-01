@@ -5,6 +5,7 @@ import com.jbp.dto.JobDescriptionRequest;
 import com.jbp.dto.JobQualityFinding;
 import com.jbp.dto.JobRequest;
 import com.jbp.dto.JobResponse;
+import com.jbp.dto.ScreeningQuestionAnswerCount;
 import com.jbp.dto.ScreeningQuestionsRequest;
 import com.jbp.dto.SuggestedScreeningQuestions;
 import com.jbp.service.JobService;
@@ -144,6 +145,19 @@ public class JobController {
     public ResponseEntity<JobResponse> cloneJob(@PathVariable Long id) {
         log.info("Cloning job id={}", id);
         return ResponseEntity.status(HttpStatus.CREATED).body(jobService.cloneJob(id));
+    }
+
+    /**
+     * How many candidates have already answered each screening question on this job.
+     *
+     * <p>Its own endpoint rather than a field on the job: the editor is the only thing that wants these
+     * numbers, and {@code JobResponse} is served to guests on every published job and every search hit.
+     */
+    @GetMapping("/{id}/screening-answer-counts")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<List<ScreeningQuestionAnswerCount>> getScreeningAnswerCounts(@PathVariable Long id) {
+        log.debug("Fetching screening answer counts for job id={}", id);
+        return ResponseEntity.ok(jobService.getScreeningAnswerCounts(id));
     }
 
     @GetMapping("/mine")
