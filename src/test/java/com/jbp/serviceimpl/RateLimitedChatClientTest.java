@@ -1,12 +1,9 @@
 package com.jbp.serviceimpl;
 
 import com.jbp.exception.LlmUnavailableException;
+import com.jbp.util.CallRateLimiter;
+import com.jbp.util.ControllableClock;
 import org.junit.jupiter.api.Test;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,7 +17,7 @@ class RateLimitedChatClientTest {
     @Test
     void allowsCallsUpToTheConfiguredLimit() {
         FakeChatCompletionClient provider = FakeChatCompletionClient.replyingWith("reply");
-        RateLimitedChatClient client = new RateLimitedChatClient(provider, LIMIT, clock);
+        RateLimitedChatClient client = clientLimitedTo(provider);
 
         for (int call = 0; call < LIMIT; call++) {
             assertThat(client.complete("system", "user")).isEqualTo("reply");
@@ -32,7 +29,7 @@ class RateLimitedChatClientTest {
     @Test
     void rejectsTheCallThatWouldExceedTheLimitWithoutContactingTheProvider() {
         FakeChatCompletionClient provider = FakeChatCompletionClient.replyingWith("reply");
-        RateLimitedChatClient client = new RateLimitedChatClient(provider, LIMIT, clock);
+        RateLimitedChatClient client = clientLimitedTo(provider);
         for (int call = 0; call < LIMIT; call++) {
             client.complete("system", "user");
         }
@@ -49,7 +46,7 @@ class RateLimitedChatClientTest {
     @Test
     void allowsCallsAgainOnceTheOldestOnesFallOutsideTheWindow() {
         FakeChatCompletionClient provider = FakeChatCompletionClient.replyingWith("reply");
-        RateLimitedChatClient client = new RateLimitedChatClient(provider, LIMIT, clock);
+        RateLimitedChatClient client = clientLimitedTo(provider);
         for (int call = 0; call < LIMIT; call++) {
             client.complete("system", "user");
         }
@@ -62,8 +59,7 @@ class RateLimitedChatClientTest {
 
     @Test
     void keepsThrottlingWhileTheWindowHasNotFullyElapsed() {
-        RateLimitedChatClient client = new RateLimitedChatClient(
-                FakeChatCompletionClient.replyingWith("reply"), LIMIT, clock);
+        RateLimitedChatClient client = clientLimitedTo(FakeChatCompletionClient.replyingWith("reply"));
         for (int call = 0; call < LIMIT; call++) {
             client.complete("system", "user");
         }
@@ -74,31 +70,7 @@ class RateLimitedChatClientTest {
                 .isInstanceOf(LlmUnavailableException.class);
     }
 
-    /**
-     * Lets a test move time forward deliberately, so window behaviour is verified without the
-     * suite pausing for a real minute.
-     */
-    private static final class ControllableClock extends Clock {
-
-        private Instant now = Instant.parse("2026-01-01T00:00:00Z");
-
-        void advanceMillis(long millis) {
-            now = now.plusMillis(millis);
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
+    private RateLimitedChatClient clientLimitedTo(FakeChatCompletionClient provider) {
+        return new RateLimitedChatClient(provider, new CallRateLimiter(LIMIT, clock));
     }
 }

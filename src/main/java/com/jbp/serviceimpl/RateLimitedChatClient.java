@@ -2,11 +2,7 @@ package com.jbp.serviceimpl;
 
 import com.jbp.exception.LlmUnavailableException;
 import com.jbp.service.ChatCompletionClient;
-
-import java.time.Clock;
-import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.Deque;
+import com.jbp.util.CallRateLimiter;
 
 /**
  * Caps how many model calls leave the application per minute, protecting the Gemini free-tier
@@ -18,53 +14,27 @@ import java.util.Deque;
  * {@link LlmUnavailableException} it already handles, so it falls back exactly as it would for
  * any other model failure.
  *
- * <p>The window slides rather than resetting on a fixed boundary, which stops a burst spanning
- * two adjacent windows from sending twice the limit. Counting is per instance and therefore per
- * application node, which matches the single-node MVP deployment; a multi-node deployment would
- * need the timestamps held somewhere shared.
+ * <p>The window itself lives in {@link CallRateLimiter}, shared with the embedding transport
+ * rather than written twice. Taking the limiter as a collaborator also means sharing one budget
+ * across transports is a wiring choice in {@code AiClientConfig}, not a rewrite here.
  */
 public class RateLimitedChatClient implements ChatCompletionClient {
 
-    private static final Duration WINDOW = Duration.ofMinutes(1);
-
     private final ChatCompletionClient delegate;
-    private final int maxCallsPerWindow;
-    private final Clock clock;
-    private final Deque<Long> callTimestamps = new ArrayDeque<>();
+    private final CallRateLimiter rateLimiter;
 
-    public RateLimitedChatClient(ChatCompletionClient delegate, int maxCallsPerWindow, Clock clock) {
+    public RateLimitedChatClient(ChatCompletionClient delegate, CallRateLimiter rateLimiter) {
         this.delegate = delegate;
-        this.maxCallsPerWindow = maxCallsPerWindow;
-        this.clock = clock;
+        this.rateLimiter = rateLimiter;
     }
 
     @Override
     public String complete(String systemPrompt, String userMessage) {
-        if (!tryReserveCallSlot()) {
+        if (!rateLimiter.tryReserveCallSlot()) {
             throw new LlmUnavailableException(
-                    "Model call limit of " + maxCallsPerWindow + " per minute reached", false);
+                    "Model call limit of " + rateLimiter.maxCallsPerWindow() + " per minute reached",
+                    false);
         }
         return delegate.complete(systemPrompt, userMessage);
-    }
-
-    /**
-     * Records a call against the current window, or reports that the window is full.
-     * Synchronized because concurrent requests share the timestamp history.
-     */
-    private synchronized boolean tryReserveCallSlot() {
-        long now = clock.millis();
-        discardCallsOlderThanWindow(now);
-        if (callTimestamps.size() >= maxCallsPerWindow) {
-            return false;
-        }
-        callTimestamps.addLast(now);
-        return true;
-    }
-
-    private void discardCallsOlderThanWindow(long now) {
-        long windowStart = now - WINDOW.toMillis();
-        while (!callTimestamps.isEmpty() && callTimestamps.peekFirst() <= windowStart) {
-            callTimestamps.pollFirst();
-        }
     }
 }

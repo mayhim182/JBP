@@ -1,10 +1,16 @@
 package com.jbp.config;
 
 import com.jbp.service.ChatCompletionClient;
+import com.jbp.service.EmbeddingClient;
 import com.jbp.serviceimpl.DisabledChatClient;
+import com.jbp.serviceimpl.DisabledEmbeddingClient;
 import com.jbp.serviceimpl.GeminiChatClient;
+import com.jbp.serviceimpl.GeminiEmbeddingClient;
 import com.jbp.serviceimpl.LoggingChatClient;
+import com.jbp.serviceimpl.LoggingEmbeddingClient;
 import com.jbp.serviceimpl.RateLimitedChatClient;
+import com.jbp.serviceimpl.RateLimitedEmbeddingClient;
+import com.jbp.util.CallRateLimiter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -15,19 +21,20 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Clock;
 
 /**
- * Builds the single {@link ChatCompletionClient} the rest of the application injects.
+ * Builds the two transports the rest of the application injects: the {@link ChatCompletionClient}
+ * every text feature goes through, and the {@link EmbeddingClient} semantic matching goes through.
  *
  * <p>Every {@code app.ai.*} key is read here and nowhere else, so the provider URL, key and
- * model name exist in exactly one place in the codebase. The clients themselves take plain
+ * model names exist in exactly one place in the codebase. The clients themselves take plain
  * values, which keeps them free of Spring annotations and directly unit-testable.
  *
- * <p>The chain is assembled outermost-first: logging wraps rate limiting wraps the provider.
+ * <p>Each chain is assembled outermost-first: logging wraps rate limiting wraps the provider.
  * Ordering it this way means a call rejected by the rate limiter is still timed and logged,
  * which is precisely the case worth seeing in the logs. Adding a behaviour later — caching,
  * metrics, a circuit breaker — means one more decorator here and no change anywhere else.
  *
- * <p>Exactly one of the two beans below exists at any time, so callers never face an ambiguous
- * dependency. With AI switched off the provider is never constructed, so no HTTP client, key or
+ * <p>Exactly one implementation of each interface exists at any time, so callers never face an
+ * ambiguous dependency. With AI switched off no provider is constructed, so no HTTP client, key or
  * model is needed and the application starts normally.
  */
 @Configuration
@@ -45,8 +52,8 @@ public class AiClientConfig {
         requireApiKey(apiKey);
         ChatCompletionClient provider = new GeminiChatClient(
                 buildRestTemplate(timeoutMillis), baseUrl, apiKey, model);
-        return new LoggingChatClient(
-                new RateLimitedChatClient(provider, rateLimitPerMinute, Clock.systemUTC()));
+        return new LoggingChatClient(new RateLimitedChatClient(
+                provider, new CallRateLimiter(rateLimitPerMinute, Clock.systemUTC())));
     }
 
     @Bean
@@ -56,12 +63,62 @@ public class AiClientConfig {
     }
 
     /**
+     * The embedding transport, assembled in the same order and for the same reason as the chat
+     * chain above: logging outermost so a throttled call is still recorded.
+     *
+     * <p>It gets its <strong>own</strong> {@link CallRateLimiter} rather than sharing the chat one,
+     * because the free tier documents quota per model and chat and embeddings are different models —
+     * one shared window would leave half of each allowance unused. If that turns out to be wrong and
+     * the quota is per project, passing one limiter instance to both decorators is the entire fix,
+     * which is why the limiter is a constructor argument rather than something either decorator
+     * builds for itself.
+     *
+     * <p>Embedding size is configuration, not a constant, because it is the one number that changes
+     * the storage footprint and the comparison cost together. 768 is the measured default; see the
+     * note on {@code GeminiEmbeddingClient} for why the response is checked against it.
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.ai.enabled", havingValue = "true")
+    public EmbeddingClient geminiBackedEmbeddingClient(
+            @Value("${app.ai.base-url}") String baseUrl,
+            @Value("${app.ai.api-key:}") String apiKey,
+            @Value("${app.ai.embedding-model:gemini-embedding-001}") String embeddingModel,
+            @Value("${app.ai.embedding-dimensions:768}") int embeddingDimensions,
+            @Value("${app.ai.timeout-millis:20000}") int timeoutMillis,
+            @Value("${app.ai.embedding-rate-limit-per-minute:12}") int rateLimitPerMinute) {
+
+        requireApiKey(apiKey);
+        EmbeddingClient provider = new GeminiEmbeddingClient(
+                buildRestTemplate(timeoutMillis), baseUrl, apiKey, embeddingModel, embeddingDimensions);
+        return new LoggingEmbeddingClient(new RateLimitedEmbeddingClient(
+                provider, new CallRateLimiter(rateLimitPerMinute, Clock.systemUTC())));
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.ai.enabled", havingValue = "false", matchIfMissing = true)
+    public EmbeddingClient disabledEmbeddingClient() {
+        return new DisabledEmbeddingClient();
+    }
+
+    /**
      * Deliberately unconditional: AI tasks are constructed whether or not a provider is wired,
      * because with AI off they still run and still return their fallback.
      */
     @Bean
     public AiTaskBudget aiTaskBudget(@Value("${app.ai.max-input-tokens:3000}") int maxInputTokens) {
         return new AiTaskBudget(maxInputTokens);
+    }
+
+    /**
+     * Also unconditional, and for a sharper reason than the budget above: <em>reading</em> stored
+     * vectors needs no provider at all. With AI switched off, existing embeddings are still comparable
+     * and Story 13.3 can still use them — it is only refreshing them that requires a live client.
+     */
+    @Bean
+    public EmbeddingSettings embeddingSettings(
+            @Value("${app.ai.embedding-model:gemini-embedding-001}") String embeddingModel,
+            @Value("${app.ai.embedding-dimensions:768}") int embeddingDimensions) {
+        return new EmbeddingSettings(embeddingModel, embeddingDimensions);
     }
 
     /**
