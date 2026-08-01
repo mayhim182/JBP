@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jbp.config.AiTaskBudget;
 import com.jbp.dto.SuggestedScreeningQuestions;
 import com.jbp.exception.LlmUnavailableException;
+import com.jbp.model.ScreeningQuestionType;
 import com.jbp.model.SeniorityLevel;
 import com.jbp.service.ChatCompletionClient;
 import com.jbp.service.ScreeningQuestionSuggester.ScreeningQuestionBrief;
@@ -31,10 +32,14 @@ class AiScreeningQuestionSuggesterTest {
 
     private static final String USABLE_REPLY = """
             {"questions": [
-              "How many years have you worked with Java in production?",
-              "Describe a distributed-systems failure you diagnosed and fixed.",
-              "Are you eligible to work in India without sponsorship?",
-              "Which event-streaming tools have you operated at scale?"
+              {"question": "How many years have you worked with Java in production?",
+               "answerType": "SHORT_ANSWER"},
+              {"question": "Describe a distributed-systems failure you diagnosed and fixed.",
+               "answerType": "LONG_ANSWER"},
+              {"question": "Are you eligible to work in India without sponsorship?",
+               "answerType": "YES_NO"},
+              {"question": "Which event-streaming tools have you operated at scale?",
+               "answerType": "SHORT_ANSWER"}
             ]}
             """;
 
@@ -51,7 +56,55 @@ class AiScreeningQuestionSuggesterTest {
         SuggestedScreeningQuestions suggestions = suggester.suggest(fullBrief());
 
         assertThat(suggestions.getQuestions()).hasSize(4);
-        assertThat(suggestions.getQuestions().get(0)).startsWith("How many years");
+        assertThat(suggestions.getQuestions().get(0).getQuestion()).startsWith("How many years");
+    }
+
+    /**
+     * The type is the whole point of the field: a suggestion the recruiter can accept as-is has to
+     * arrive with one, and the three constants have to survive round-tripping through the reply.
+     */
+    @Test
+    void carriesTheAnswerTypeTheModelChoseForEachQuestion() {
+        AiScreeningQuestionSuggester suggester =
+                suggesterBacked(FakeChatCompletionClient.replyingWith(USABLE_REPLY));
+
+        SuggestedScreeningQuestions suggestions = suggester.suggest(fullBrief());
+
+        assertThat(suggestions.getQuestions())
+                .extracting(SuggestedScreeningQuestions.SuggestedScreeningQuestion::getAnswerType)
+                .containsExactly(
+                        ScreeningQuestionType.SHORT_ANSWER,
+                        ScreeningQuestionType.LONG_ANSWER,
+                        ScreeningQuestionType.YES_NO,
+                        ScreeningQuestionType.SHORT_ANSWER);
+    }
+
+    /**
+     * A suggestion with no type would reach design 18's panel as a blank segmented control, which is
+     * exactly the "pick one" state that panel is specified never to show. Rejecting the reply gives
+     * the recruiter the disabled trigger instead, which is a state they can read.
+     */
+    @Test
+    void refusesWhenAQuestionArrivesWithNoAnswerType() {
+        AiScreeningQuestionSuggester suggester =
+                suggesterBacked(FakeChatCompletionClient.replyingWith("""
+                        {"questions": [{"question": "Are you eligible to work in India?"}]}
+                        """));
+
+        assertThatThrownBy(() -> suggester.suggest(fullBrief()))
+                .isInstanceOf(LlmUnavailableException.class);
+    }
+
+    @Test
+    void refusesWhenTheModelInventsAnAnswerTypeThatDoesNotExist() {
+        AiScreeningQuestionSuggester suggester =
+                suggesterBacked(FakeChatCompletionClient.replyingWith("""
+                        {"questions": [{"question": "Pick your strongest language.",
+                                        "answerType": "MULTIPLE_CHOICE"}]}
+                        """));
+
+        assertThatThrownBy(() -> suggester.suggest(fullBrief()))
+                .isInstanceOf(LlmUnavailableException.class);
     }
 
     @Test
@@ -81,22 +134,27 @@ class AiScreeningQuestionSuggesterTest {
     }
 
     /**
-     * The opening words decide which control the candidate is shown, because the editor derives the
-     * answer type from wording rather than storing one. If the prompt stops naming those openers,
-     * the derivation silently drifts — so the instruction itself is asserted.
+     * The prompt used to dictate opening words, because the editor read the answer type out of them.
+     * It must not any more: a question worded to trip a heuristic reads worse than one worded to ask
+     * the thing, and there is no heuristic left to trip. What the prompt has to name instead is the
+     * three constants, spelled exactly as the enum spells them — a reply naming a fourth is discarded
+     * whole, so a drifted prompt costs the recruiter every suggestion rather than one.
      */
     @Test
-    void tellsTheModelExactlyWhichOpeningWordsDecideTheAnswerType() {
+    void namesTheThreeAnswerTypesAndNoLongerDictatesOpeningWords() {
         FakeChatCompletionClient provider = FakeChatCompletionClient.replyingWith(USABLE_REPLY);
 
         suggesterBacked(provider).suggest(fullBrief());
 
-        // Asserted opener by opener rather than as one phrase: the prompt is a text block that
+        // Asserted constant by constant rather than as one phrase: the prompt is a text block that
         // wraps, so any assertion spanning a line break passes or fails on where the wrap lands
-        // rather than on whether the opener is present.
+        // rather than on whether the constant is present.
         assertThat(provider.lastSystemPrompt())
-                .contains("Are you", "Do you", "Did you", "Have you", "Can you", "Will you", "Is your")
-                .contains("Describe", "Explain", "Tell us", "Walk us", "Why", "How would", "What would");
+                .contains(ScreeningQuestionType.SHORT_ANSWER.name())
+                .contains(ScreeningQuestionType.LONG_ANSWER.name())
+                .contains(ScreeningQuestionType.YES_NO.name())
+                .contains("answerType")
+                .doesNotContain("MUST begin with");
     }
 
     @Test
@@ -150,7 +208,9 @@ class AiScreeningQuestionSuggesterTest {
     void discardsAReplyCarryingKeysTheResponseDoesNotDeclare() {
         AiScreeningQuestionSuggester suggester =
                 suggesterBacked(FakeChatCompletionClient.replyingWith("""
-                        {"questions": ["Are you available to start in June?"], "notes": "hi"}
+                        {"questions": [{"question": "Are you available to start in June?",
+                                        "answerType": "YES_NO"}],
+                         "notes": "hi"}
                         """));
 
         assertThatThrownBy(() -> suggester.suggest(fullBrief()))
@@ -165,7 +225,10 @@ class AiScreeningQuestionSuggesterTest {
     void keepsAnAnswerShorterThanTheThreeToFiveTheTargetAsksFor() {
         AiScreeningQuestionSuggester suggester =
                 suggesterBacked(FakeChatCompletionClient.replyingWith("""
-                        {"questions": ["Are you eligible to work in India?", "Describe your last outage."]}
+                        {"questions": [
+                          {"question": "Are you eligible to work in India?", "answerType": "YES_NO"},
+                          {"question": "Describe your last outage.", "answerType": "LONG_ANSWER"}
+                        ]}
                         """));
 
         assertThat(suggester.suggest(fullBrief()).getQuestions()).hasSize(2);
@@ -173,7 +236,8 @@ class AiScreeningQuestionSuggesterTest {
 
     @Test
     void discardsAnAnswerThatHasClearlyRunAway() {
-        String forty = "\"Are you sure?\", ".repeat(39) + "\"Are you sure?\"";
+        String one = "{\"question\": \"Are you sure?\", \"answerType\": \"YES_NO\"}";
+        String forty = (one + ", ").repeat(39) + one;
         AiScreeningQuestionSuggester suggester =
                 suggesterBacked(FakeChatCompletionClient.replyingWith("{\"questions\": [" + forty + "]}"));
 

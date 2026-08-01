@@ -5,6 +5,7 @@ import com.jbp.dto.JobDescriptionRequest;
 import com.jbp.dto.JobQualityFinding;
 import com.jbp.dto.JobRequest;
 import com.jbp.dto.JobResponse;
+import com.jbp.dto.ScreeningQuestionAnswerCount;
 
 import java.util.List;
 
@@ -51,4 +52,19 @@ public interface JobService {
 
     /** All jobs owned by the current recruiter, in any status. */
     List<JobResponse> getMyJobs();
+
+    /**
+     * How many candidates have already answered each of a job's screening questions, so the editor can
+     * warn before an edit lands on a question people have replied to.
+     *
+     * <p>Owner-only, and one entry per question in the job's own order — including the zeros, so the
+     * editor can line the numbers up against the questions it is already showing.
+     *
+     * <p>Matched on the question's text, which is the only handle there is: {@code ScreeningAnswer}
+     * snapshots the wording at apply time and a screening question carries no id. So a question whose
+     * wording was edited at some earlier point reports the answers given since that edit, not the ones
+     * given before it. Accepted knowingly — the alternative is an id on every question and a migration
+     * to assign one, and the number here drives a warning rather than a decision.
+     */
+    List<ScreeningQuestionAnswerCount> getScreeningAnswerCounts(Long jobId);
 }

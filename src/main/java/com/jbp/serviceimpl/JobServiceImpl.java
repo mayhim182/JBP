@@ -5,12 +5,16 @@ import com.jbp.dto.JobDescriptionRequest;
 import com.jbp.dto.JobQualityFinding;
 import com.jbp.dto.JobRequest;
 import com.jbp.dto.JobResponse;
+import com.jbp.dto.ScreeningQuestionAnswerCount;
+import com.jbp.dto.ScreeningQuestionDto;
 import com.jbp.exception.ConflictException;
 import com.jbp.exception.ResourceNotFoundException;
 import com.jbp.mapper.JobMapper;
 import com.jbp.model.Company;
 import com.jbp.model.Job;
 import com.jbp.model.JobStatus;
+import com.jbp.model.ScreeningQuestion;
+import com.jbp.repository.ApplicationRepository;
 import com.jbp.repository.JobRepository;
 import com.jbp.security.CurrentUserProvider;
 import com.jbp.service.CompanyService;
@@ -27,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -35,6 +41,7 @@ import java.util.List;
 public class JobServiceImpl implements JobService {
 
     private final JobRepository jobRepository;
+    private final ApplicationRepository applicationRepository;
     private final CompanyService companyService;
     private final CurrentUserProvider currentUserProvider;
     private final JobMapper jobMapper;
@@ -187,7 +194,8 @@ public class JobServiceImpl implements JobService {
                 .seniority(source.getSeniority())
                 .salaryMin(source.getSalaryMin())
                 .salaryMax(source.getSalaryMax())
-                .screeningQuestions(new ArrayList<>(source.getScreeningQuestions()))
+                .screeningQuestions(source.getScreeningQuestions().stream().map(this::copyOf)
+                        .collect(Collectors.toCollection(ArrayList::new)))
                 .build();
 
         Job saved = jobRepository.save(copy);
@@ -213,6 +221,22 @@ public class JobServiceImpl implements JobService {
                 .toList();
     }
 
+    @Override
+    public List<ScreeningQuestionAnswerCount> getScreeningAnswerCounts(Long jobId) {
+        Job job = findOwnJobOrThrow(jobId);
+
+        Map<String, Long> answeredPerQuestion = applicationRepository.countAnswersPerQuestion(jobId).stream()
+                .collect(Collectors.toMap(
+                        ApplicationRepository.ScreeningAnswerCount::getQuestion,
+                        ApplicationRepository.ScreeningAnswerCount::getAnsweredCount));
+
+        return job.getScreeningQuestions().stream()
+                .map(ScreeningQuestion::getQuestion)
+                .map(text -> new ScreeningQuestionAnswerCount(
+                        text, answeredPerQuestion.getOrDefault(text, 0L)))
+                .toList();
+    }
+
     private void applyRequestToJob(Job job, JobRequest request) {
         job.setTitle(request.getTitle());
         job.setDescription(request.getDescription());
@@ -223,8 +247,25 @@ public class JobServiceImpl implements JobService {
         job.setSeniority(request.getSeniority());
         job.setSalaryMin(request.getSalaryMin());
         job.setSalaryMax(request.getSalaryMax());
-        job.setScreeningQuestions(
-                request.getScreeningQuestions() != null ? request.getScreeningQuestions() : new ArrayList<>());
+        job.setScreeningQuestions(toEntities(request.getScreeningQuestions()));
+    }
+
+    private List<ScreeningQuestion> toEntities(List<ScreeningQuestionDto> requested) {
+        if (requested == null) {
+            return new ArrayList<>();
+        }
+        return requested.stream()
+                .map(dto -> new ScreeningQuestion(dto.getQuestion(), dto.getAnswerType()))
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    /**
+     * A fresh element per question. {@link ScreeningQuestion} is mutable, so copying the list alone
+     * would leave the clone and its source sharing elements and editing one would silently edit both —
+     * which the previous {@code List<String>} could not do.
+     */
+    private ScreeningQuestion copyOf(ScreeningQuestion question) {
+        return new ScreeningQuestion(question.getQuestion(), question.getAnswerType());
     }
 
     private void ensureCurrentUserOwnsJob(Job job) {
