@@ -39,7 +39,13 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        // Which features exist, fetched before sign-in so the client can gate its UI
+                        // on the first render. Booleans only — nothing about a user or a provider.
+                        .requestMatchers(HttpMethod.GET, "/api/config").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/jobs").permitAll()
+                        // Single-segment wildcard, so this exposes GET /api/jobs/{id} and nothing
+                        // beneath it — /api/jobs/{id}/match and /api/jobs/{id}/interview-prep stay
+                        // authenticated and are additionally role-gated on their methods.
                         .requestMatchers(HttpMethod.GET, "/api/jobs/*").permitAll()
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())

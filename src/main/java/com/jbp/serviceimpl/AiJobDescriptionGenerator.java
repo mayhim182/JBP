@@ -9,6 +9,7 @@ import com.jbp.service.JobDescriptionGenerator;
 import jakarta.validation.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
@@ -28,7 +29,14 @@ import java.util.Set;
  * <p>Only job and company content is sent. No candidate data reaches the provider from this task,
  * which is what lets Epic 12 ship regardless of the data-retention question that governs Epic 11.
  */
+/*
+ * Paired by condition with DisabledJobDescriptionGenerator so exactly one bean exists. Defaults to
+ * present: with the property absent this behaves precisely as it did before the flag existed, which
+ * is what makes the capability switch additive rather than a behaviour change.
+ */
 @Service
+@ConditionalOnProperty(name = "app.ai.features.job-description", havingValue = "true",
+        matchIfMissing = true)
 public class AiJobDescriptionGenerator
         extends AbstractStructuredAiTask<JobDescriptionGenerator.JobDescriptionBrief, GeneratedJobDescription>
         implements JobDescriptionGenerator {
