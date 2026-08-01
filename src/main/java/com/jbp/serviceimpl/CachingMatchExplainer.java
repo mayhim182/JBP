@@ -31,7 +31,16 @@ public class CachingMatchExplainer implements MatchExplainer {
      * {@code #input.candidateId} through getter conventions, which a record does not follow.
      */
     @Override
-    @Cacheable(cacheNames = CACHE_NAME,
+    /*
+     * sync = true is what actually makes concurrent viewers share one call. Without it Spring's
+     * interceptor does get-miss-invoke-put, so N requests that miss together produce N model calls;
+     * with it, the invocation runs inside Caffeine's atomic loader and the rest wait on the winner.
+     * Observed live at 18:19 on 2026-08-01: four simultaneous requests for one key, four calls.
+     *
+     * A loader that throws still caches nothing and its exception is rethrown unwrapped, so nothing
+     * about the fallback or the expiry policy changes.
+     */
+    @Cacheable(cacheNames = CACHE_NAME, sync = true,
             key = "#input.candidateId() + ':' + #input.jobId() + ':' + #input.scoreVersion()")
     public MatchExplanation explain(MatchExplanationInput input) {
         return delegate.explain(input);

@@ -40,6 +40,30 @@ import java.time.Clock;
 @Configuration
 public class AiClientConfig {
 
+    /**
+     * Which AI features are on, for the client to gate its UI before first paint.
+     *
+     * <p>Story 14.1's interview-prep section is <strong>absent</strong> when its capability is off —
+     * no header, no placeholder, no "unavailable" line. That is only implementable if the answer is
+     * knowable before the first render; deriving it from a failed fetch would show a header and then
+     * remove it, and that flash is worse than either end state.
+     *
+     * <p>Each capability is ANDed with the master switch, so a capability can never report on while
+     * AI as a whole is off.
+     */
+    @Bean
+    public AiCapabilities aiCapabilities(
+            @Value("${app.ai.enabled:false}") boolean aiEnabled,
+            @Value("${app.ai.features.interview-prep:true}") boolean interviewPrep,
+            @Value("${app.ai.features.match-explanation:true}") boolean matchExplanation,
+            @Value("${app.ai.features.job-description:true}") boolean jobDescription) {
+
+        if (!aiEnabled) {
+            return AiCapabilities.none();
+        }
+        return new AiCapabilities(interviewPrep, matchExplanation, jobDescription);
+    }
+
     @Bean
     @ConditionalOnProperty(name = "app.ai.enabled", havingValue = "true")
     public ChatCompletionClient geminiBackedChatCompletionClient(
