@@ -8,6 +8,7 @@ import com.jbp.model.Job;
 import com.jbp.model.JobStatus;
 import com.jbp.model.NotificationType;
 import com.jbp.repository.JobRepository;
+import com.jbp.event.EmbeddingRefreshPublisher;
 import com.jbp.service.AdminJobService;
 import com.jbp.service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class AdminJobServiceImpl implements AdminJobService {
     private final JobRepository jobRepository;
     private final JobMapper jobMapper;
     private final NotificationService notificationService;
+    private final EmbeddingRefreshPublisher embeddingRefreshPublisher;
 
     @Override
     public List<JobResponse> getPendingJobs() {
@@ -41,6 +43,10 @@ public class AdminJobServiceImpl implements AdminJobService {
         job.setStatus(JobStatus.PUBLISHED);
         jobRepository.save(job);
         log.info("Job {} approved and published by admin", jobId);
+        // Here rather than in JobServiceImpl.publishJob, which only submits for moderation: a job that
+        // is never approved is never searchable, so embedding it there would spend free-tier quota on
+        // vectors nothing can ever match against.
+        embeddingRefreshPublisher.jobChanged(jobId);
         notificationService.createNotification(job.getCompany().getOwner().getId(), NotificationType.JOB_MODERATION,
                 "Your job '" + job.getTitle() + "' has been approved and published.");
         return jobMapper.toResponse(job);

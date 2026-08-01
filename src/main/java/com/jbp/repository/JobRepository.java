@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface JobRepository extends JpaRepository<Job, Long> {
@@ -17,6 +18,19 @@ public interface JobRepository extends JpaRepository<Job, Long> {
 
     // Jobs in a given lifecycle status (used by candidate matching + admin moderation queue).
     List<Job> findByStatus(JobStatus status);
+
+    // A bounded page of one status, so candidate matching never loads the whole table.
+    Page<Job> findByStatus(JobStatus status, Pageable pageable);
+
+    /**
+     * The jobs among {@code ids} that are in the given status — one query for a whole page of
+     * scores.
+     *
+     * <p>An id that is unknown, or known but not published, is simply absent from the result rather
+     * than an error. That is the same tolerance the callers already had when every score was its own
+     * request and a 404 meant one missing ring, so nothing downstream has to change to keep it.
+     */
+    List<Job> findByIdInAndStatus(Collection<Long> ids, JobStatus status);
 
     long countByStatus(JobStatus status);
 

@@ -18,6 +18,7 @@ import com.jbp.security.CurrentUserProvider;
 import com.jbp.service.CandidateProfileService;
 import com.jbp.service.FileStorageService;
 import com.jbp.service.ResumeParser;
+import com.jbp.event.EmbeddingRefreshPublisher;
 import com.jbp.util.ProfileCompletenessCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,7 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
     private final FileStorageService fileStorageService;
     private final ResumeParser resumeParser;
     private final ProfileCompletenessCalculator completenessCalculator;
+    private final EmbeddingRefreshPublisher embeddingRefreshPublisher;
 
     @Override
     @Transactional
@@ -62,6 +64,9 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
         applyRequestToProfile(profile, request);
         CandidateProfile saved = profileRepository.save(profile);
         log.info("Candidate profile updated for user {}", saved.getUser().getId());
+        // Announce the change only; whether it needs an embedding call is decided after this commits,
+        // on another thread, so a slow provider cannot hold up the response.
+        embeddingRefreshPublisher.candidateProfileChanged(saved.getId());
         return toResponse(saved);
     }
 
