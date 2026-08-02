@@ -51,12 +51,25 @@ public class RecruiterApplicationServiceImpl implements RecruiterApplicationServ
         ensureRecruiterOwnsJob(job);
         // Applicants arrive ranked by match score (best first), not apply-order.
         return applicationRepository.findByJobId(jobId).stream()
-                .map(application -> toRankedResponse(application, job))
+                .map(application -> toScoredResponse(application, job))
                 .sorted(Comparator.comparingInt(ApplicationResponse::getMatchScore).reversed())
                 .toList();
     }
 
-    private ApplicationResponse toRankedResponse(Application application, Job job) {
+    /**
+     * The recruiter view of one application, always carrying its match.
+     *
+     * <p><strong>Every path returns this, not {@code applicationMapper.toRecruiterResponse} alone.</strong>
+     * Opening an applicant, moving their stage and saving a review all return an
+     * {@link ApplicationResponse} that the board merges over the row it already holds, so a response
+     * that omitted the match would blank a score the list had correctly loaded — which is exactly what
+     * used to happen: the ring vanished the moment a recruiter opened an applicant, "Why this rank"
+     * read "No match reason provided", and the funnel's average drifted down as they triaged.
+     *
+     * <p>Scored on demand rather than stored: the score is a function of a live profile and a live
+     * job, and persisting it would make it a snapshot that silently disagrees with both.
+     */
+    private ApplicationResponse toScoredResponse(Application application, Job job) {
         ApplicationResponse response = applicationMapper.toRecruiterResponse(application);
         CandidateProfile profile = candidateProfileService
                 .findProfileForCandidate(application.getCandidate().getId())
@@ -65,6 +78,11 @@ public class RecruiterApplicationServiceImpl implements RecruiterApplicationServ
         response.setMatchScore(match.score());
         response.setMatchReason(match.reason());
         return response;
+    }
+
+    /** For the three single-application paths, where the job comes from the application itself. */
+    private ApplicationResponse toScoredResponse(Application application) {
+        return toScoredResponse(application, application.getJob());
     }
 
     @Override
@@ -76,7 +94,7 @@ public class RecruiterApplicationServiceImpl implements RecruiterApplicationServ
         if (application.getStatus() == ApplicationStatus.APPLIED) {
             changeStatus(application, ApplicationStatus.VIEWED, null);
         }
-        return applicationMapper.toRecruiterResponse(application);
+        return toScoredResponse(application);
     }
 
     @Override
@@ -85,7 +103,7 @@ public class RecruiterApplicationServiceImpl implements RecruiterApplicationServ
         Application application = findApplicationOrThrow(applicationId);
         ensureRecruiterOwnsApplication(application);
         changeStatus(application, request.getStatus(), request.getRejectionReason());
-        return applicationMapper.toRecruiterResponse(application);
+        return toScoredResponse(application);
     }
 
     @Override
@@ -105,7 +123,7 @@ public class RecruiterApplicationServiceImpl implements RecruiterApplicationServ
         }
         applicationRepository.save(application);
         log.info("Recruiter updated review for application {}", applicationId);
-        return applicationMapper.toRecruiterResponse(application);
+        return toScoredResponse(application);
     }
 
     // Applies a validated stage change and publishes the transparency event (single source of truth).

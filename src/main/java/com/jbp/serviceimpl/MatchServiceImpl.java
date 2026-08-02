@@ -18,9 +18,7 @@ import com.jbp.service.MatchExplainer.MatchExplanationInput;
 import com.jbp.service.MatchExplainer.SkillDemand;
 import com.jbp.service.MatchScorer;
 import com.jbp.service.MatchService;
-import com.jbp.util.EmbeddingTexts;
 import com.jbp.util.ScoreVersion;
-import com.jbp.util.TextHash;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -172,18 +170,8 @@ public class MatchServiceImpl implements MatchService {
                 .toList();
     }
 
-    /**
-     * The source hashes are computed rather than read back from {@code embedding_vectors}: it is the
-     * same {@code sha256(EmbeddingTexts…)} value the store would hold, costs no query, and is available
-     * even when AI is switched off and no embedding row exists at all.
-     */
     private String scoreVersionOf(CandidateProfile profile, Job job, MatchScorer.MatchResult result) {
-        return ScoreVersion.of(
-                result.mode(),
-                result.score(),
-                result.factors(),
-                TextHash.sha256Hex(EmbeddingTexts.forCandidateProfile(profile)),
-                TextHash.sha256Hex(EmbeddingTexts.forJob(job)));
+        return ScoreVersion.of(result, profile, job);
     }
 
     /**

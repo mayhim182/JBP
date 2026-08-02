@@ -22,10 +22,11 @@ package com.jbp.config;
 public record AiCapabilities(boolean interviewPrep,
                              boolean matchExplanation,
                              boolean jobDescription,
-                             boolean screeningAnswerAssist) {
+                             boolean screeningAnswerAssist,
+                             boolean applicantSummary) {
 
     /** Every capability off — what the client is told when AI is switched off entirely. */
     public static AiCapabilities none() {
-        return new AiCapabilities(false, false, false, false);
+        return new AiCapabilities(false, false, false, false, false);
     }
 }

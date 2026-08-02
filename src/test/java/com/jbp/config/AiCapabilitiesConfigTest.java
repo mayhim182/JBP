@@ -57,6 +57,7 @@ class AiCapabilitiesConfigTest {
                     .isTrue();
             assertThat(capabilities.jobDescription()).isTrue();
             assertThat(capabilities.screeningAnswerAssist()).isTrue();
+            assertThat(capabilities.applicantSummary()).isTrue();
         });
     }
 
@@ -88,6 +89,22 @@ class AiCapabilitiesConfigTest {
             assertThat(capabilities.screeningAnswerAssist()).isFalse();
             assertThat(capabilities.interviewPrep()).isTrue();
             assertThat(capabilities.jobDescription()).isTrue();
+        });
+    }
+
+    /**
+     * Story 14.3's flag decides whether the drawer draws a summary panel at all, so it has to be
+     * answerable before first paint for the same reason interview prep's is.
+     */
+    @Test
+    void switchesOffApplicantSummariesOnTheirOwn() {
+        contextRunner.withPropertyValues(
+                "app.ai.enabled=true",
+                "app.ai.features.applicant-summary=false").run(context -> {
+            AiCapabilities capabilities = context.getBean(AiCapabilities.class);
+            assertThat(capabilities.applicantSummary()).isFalse();
+            assertThat(capabilities.screeningAnswerAssist()).isTrue();
+            assertThat(capabilities.interviewPrep()).isTrue();
         });
     }
 }

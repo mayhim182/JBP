@@ -1,6 +1,6 @@
 package com.jbp.config;
 
-import com.jbp.util.DraftAnswerBudget;
+import com.jbp.util.PerUserCallBudget;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -33,7 +33,7 @@ public class DraftAnswerBudgetConfig {
      *                         the same forgiveness a restart already grants everyone.
      */
     @Bean
-    public DraftAnswerBudget draftAnswerBudget(
+    public PerUserCallBudget draftAnswerBudget(
             @Value("${app.draft-answer.max-per-candidate:10}") int maxDrafts,
             @Value("${app.draft-answer.window-hours:24}") long windowHours,
             @Value("${app.draft-answer.max-tracked-candidates:50000}") int maxTrackedUsers) {
@@ -41,6 +41,6 @@ public class DraftAnswerBudgetConfig {
         Duration window = Duration.ofHours(windowHours);
         log.info("Screening-answer drafts: {} per candidate per {}, tracking at most {} candidates",
                 maxDrafts, window, maxTrackedUsers);
-        return new DraftAnswerBudget(maxDrafts, window, maxTrackedUsers, Clock.systemUTC());
+        return new PerUserCallBudget(maxDrafts, window, maxTrackedUsers, Clock.systemUTC());
     }
 }

@@ -58,12 +58,14 @@ public class AiClientConfig {
             @Value("${app.ai.features.interview-prep:true}") boolean interviewPrep,
             @Value("${app.ai.features.match-explanation:true}") boolean matchExplanation,
             @Value("${app.ai.features.job-description:true}") boolean jobDescription,
-            @Value("${app.ai.features.screening-answer-assist:true}") boolean screeningAnswerAssist) {
+            @Value("${app.ai.features.screening-answer-assist:true}") boolean screeningAnswerAssist,
+            @Value("${app.ai.features.applicant-summary:true}") boolean applicantSummary) {
 
         if (!aiEnabled) {
             return AiCapabilities.none();
         }
-        return new AiCapabilities(interviewPrep, matchExplanation, jobDescription, screeningAnswerAssist);
+        return new AiCapabilities(
+                interviewPrep, matchExplanation, jobDescription, screeningAnswerAssist, applicantSummary);
     }
 
     @Bean

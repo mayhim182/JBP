@@ -15,7 +15,7 @@ import com.jbp.security.CurrentUserProvider;
 import com.jbp.service.CandidateProfileService;
 import com.jbp.service.ScreeningAnswerAssistant;
 import com.jbp.util.ControllableClock;
-import com.jbp.util.DraftAnswerBudget;
+import com.jbp.util.PerUserCallBudget;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -41,15 +41,15 @@ class ScreeningAnswerDraftServiceImplTest {
     private final CurrentUserProvider currentUserProvider = Mockito.mock(CurrentUserProvider.class);
     private final CandidateProfileService candidateProfileService = Mockito.mock(CandidateProfileService.class);
     private final ScreeningAnswerAssistant assistant = Mockito.mock(ScreeningAnswerAssistant.class);
-    private final DraftAnswerBudget budget =
-            new DraftAnswerBudget(ALLOWANCE, Duration.ofHours(24), 100, new ControllableClock());
+    private final PerUserCallBudget budget =
+            new PerUserCallBudget(ALLOWANCE, Duration.ofHours(24), 100, new ControllableClock());
 
     private final ScreeningAnswerDraftServiceImpl service = new ScreeningAnswerDraftServiceImpl(
             currentUserProvider,
             candidateProfileService,
             assistant,
             budget,
-            new AiCapabilities(true, true, true, true));
+            capabilitiesWithScreeningAnswerAssist(true));
 
     @Test
     void returnsTheDraftAndWhatIsLeftOfTheAllowance() {
@@ -108,7 +108,7 @@ class ScreeningAnswerDraftServiceImplTest {
         assertThatThrownBy(() -> service.draftAnswer(request(ScreeningQuestionType.LONG_ANSWER)))
                 .isInstanceOf(InsufficientProfileException.class);
 
-        assertThat(budget.remainingDrafts(CANDIDATE_ID)).isEqualTo(ALLOWANCE);
+        assertThat(budget.remainingCalls(CANDIDATE_ID)).isEqualTo(ALLOWANCE);
     }
 
     @Test
@@ -136,7 +136,7 @@ class ScreeningAnswerDraftServiceImplTest {
         assertThatThrownBy(() -> service.draftAnswer(request(ScreeningQuestionType.LONG_ANSWER)))
                 .isInstanceOf(LlmUnavailableException.class);
 
-        assertThat(budget.remainingDrafts(CANDIDATE_ID)).isEqualTo(ALLOWANCE);
+        assertThat(budget.remainingCalls(CANDIDATE_ID)).isEqualTo(ALLOWANCE);
     }
 
     /**
@@ -152,7 +152,7 @@ class ScreeningAnswerDraftServiceImplTest {
         assertThatThrownBy(() -> service.draftAnswer(request(ScreeningQuestionType.LONG_ANSWER)))
                 .isInstanceOf(InsufficientProfileException.class);
 
-        assertThat(budget.remainingDrafts(CANDIDATE_ID)).isEqualTo(ALLOWANCE);
+        assertThat(budget.remainingCalls(CANDIDATE_ID)).isEqualTo(ALLOWANCE);
     }
 
     @Test
@@ -177,11 +177,23 @@ class ScreeningAnswerDraftServiceImplTest {
     void refusesEverythingWhenTheCapabilityIsSwitchedOff() {
         ScreeningAnswerDraftServiceImpl switchedOff = new ScreeningAnswerDraftServiceImpl(
                 currentUserProvider, candidateProfileService, assistant, budget,
-                new AiCapabilities(true, true, true, false));
+                capabilitiesWithScreeningAnswerAssist(false));
 
         assertThatThrownBy(() -> switchedOff.draftAnswer(request(ScreeningQuestionType.LONG_ANSWER)))
                 .isInstanceOf(LlmUnavailableException.class);
         Mockito.verifyNoInteractions(assistant);
+    }
+
+    /**
+     * Every capability on except the one under test, named rather than positional.
+     *
+     * <p>{@link AiCapabilities} is a record that grows a component per AI feature, and these two call
+     * sites were written as five positional booleans — so adding Story 14.3's flag broke this file
+     * rather than the file that owns the flag. One place to fix next time, and the argument says what
+     * it means.
+     */
+    private AiCapabilities capabilitiesWithScreeningAnswerAssist(boolean enabled) {
+        return new AiCapabilities(true, true, true, enabled, true);
     }
 
     private DraftAnswerRequest request(ScreeningQuestionType answerType) {

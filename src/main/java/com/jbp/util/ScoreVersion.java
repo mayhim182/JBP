@@ -1,6 +1,9 @@
 package com.jbp.util;
 
+import com.jbp.model.CandidateProfile;
+import com.jbp.model.Job;
 import com.jbp.model.ScorerMode;
+import com.jbp.service.MatchScorer;
 import com.jbp.service.MatchScorer.MatchFactor;
 
 import java.util.List;
@@ -55,6 +58,26 @@ public final class ScoreVersion {
     private static final String FIELD_SEPARATOR = "|";
 
     private ScoreVersion() {
+    }
+
+    /**
+     * The version of a scored pair, from the pair itself.
+     *
+     * <p>The overload every caller should reach for. Story 13.5 computed the two source hashes at its
+     * own call site and Story 14.3 needed the identical fingerprint for its summary cache — and two
+     * hand-assembled versions that drifted would mean one feature serving stale prose against the
+     * other's fresh number, which is precisely what this class exists to prevent.
+     *
+     * <p>The hashes are computed rather than read back from {@code embedding_vectors}: it is the same
+     * {@code sha256(EmbeddingTexts…)} value the store would hold, costs no query, and is available
+     * even when AI is switched off and no embedding row exists at all.
+     */
+    public static String of(MatchScorer.MatchResult result, CandidateProfile profile, Job job) {
+        return of(result.mode(),
+                result.score(),
+                result.factors(),
+                TextHash.sha256Hex(EmbeddingTexts.forCandidateProfile(profile)),
+                TextHash.sha256Hex(EmbeddingTexts.forJob(job)));
     }
 
     /**
