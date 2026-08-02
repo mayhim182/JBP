@@ -1,11 +1,13 @@
 package com.jbp.controller;
 
+import com.jbp.dto.ApplicantSummary;
 import com.jbp.dto.ApplicationResponse;
 import com.jbp.dto.ApplicationReviewRequest;
 import com.jbp.dto.ApplicationStatusUpdateRequest;
 import com.jbp.dto.ApplyRequest;
 import com.jbp.dto.DraftAnswerRequest;
 import com.jbp.dto.DraftAnswerResponse;
+import com.jbp.service.ApplicantSummaryService;
 import com.jbp.service.CandidateApplicationService;
 import com.jbp.service.RecruiterApplicationService;
 import com.jbp.service.ScreeningAnswerDraftService;
@@ -33,6 +35,7 @@ public class ApplicationController {
     private final CandidateApplicationService candidateApplicationService;
     private final RecruiterApplicationService recruiterApplicationService;
     private final ScreeningAnswerDraftService screeningAnswerDraftService;
+    private final ApplicantSummaryService applicantSummaryService;
 
     // ---- Candidate ----
 
@@ -78,6 +81,26 @@ public class ApplicationController {
     public ResponseEntity<List<ApplicationResponse>> getApplicants(@PathVariable Long jobId) {
         log.debug("Fetching applicants for job {}", jobId);
         return ResponseEntity.ok(recruiterApplicationService.getApplicantsForJob(jobId));
+    }
+
+    /**
+     * The three-line read on one applicant (Story 14.3) — strongest fit, main gap, one thing worth
+     * probing. Complements "Why this rank" rather than restating it: the model is never told the
+     * score, so it cannot echo one.
+     *
+     * <p>Its own endpoint rather than a field on {@link ApplicationResponse}, so the drawer paints
+     * the deterministic half immediately and never waits on prose — design 24 B1's rule that triage
+     * is not blocked by a model call.
+     *
+     * <p>Four refusals: 409 when the application is already decided (24 B3), 422 when the profile
+     * cannot ground a read (24 B4), 429 when asked far faster than a human triages, 503 when the
+     * model could not be reached (24 B2).
+     */
+    @GetMapping("/applications/{id}/summary")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<ApplicantSummary> summariseApplicant(@PathVariable Long id) {
+        log.debug("Summarising applicant for application {}", id);
+        return ResponseEntity.ok(applicantSummaryService.summariseApplicant(id));
     }
 
     @GetMapping("/applications/{id}")

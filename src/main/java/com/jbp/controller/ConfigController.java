@@ -38,6 +38,7 @@ public class ConfigController {
                         .matchExplanation(aiCapabilities.matchExplanation())
                         .jobDescription(aiCapabilities.jobDescription())
                         .screeningAnswerAssist(aiCapabilities.screeningAnswerAssist())
+                        .applicantSummary(aiCapabilities.applicantSummary())
                         .build())
                 .build());
     }

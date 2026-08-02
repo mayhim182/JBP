@@ -52,5 +52,13 @@ public class ClientConfigResponse {
          * the row is simply absent, exactly as it is on a Yes/No question.
          */
         private boolean screeningAnswerAssist;
+
+        /**
+         * Story 14.3. When false the applicant review drawer renders <em>no</em> summary panel —
+         * design 24 B3: no header, no placeholder, no "unavailable" line. Nobody was promised the
+         * panel, so explaining its absence would advertise a feature the org has switched off.
+         * Gated on this rather than on a failed fetch, so it never appears and then vanishes.
+         */
+        private boolean applicantSummary;
     }
 }

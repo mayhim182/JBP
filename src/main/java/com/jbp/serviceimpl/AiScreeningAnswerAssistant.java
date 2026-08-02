@@ -3,19 +3,11 @@ package com.jbp.serviceimpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jbp.config.AiTaskBudget;
 import com.jbp.dto.DraftedScreeningAnswer;
-import com.jbp.model.CandidateProfile;
-import com.jbp.model.CandidateProject;
-import com.jbp.model.Education;
-import com.jbp.model.Experience;
 import com.jbp.service.ChatCompletionClient;
 import com.jbp.service.ScreeningAnswerAssistant;
+import com.jbp.util.CandidateProfileText;
 import jakarta.validation.Validator;
 import org.springframework.stereotype.Service;
-
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Objects;
 
 /**
  * Drafts one screening answer with the model, reusing the pipeline every AI task shares.
@@ -24,11 +16,8 @@ import java.util.Objects;
  * truncation, strict parsing, validation and degrading on failure all come from
  * {@link AbstractStructuredAiTask}, exactly as in {@link AiScreeningQuestionSuggester}.
  *
- * <p><strong>The user message is built here rather than by {@code EmbeddingTexts}.</strong> That
- * class flattens a profile into one comma-joined line for a vector, drops projects entirely, and its
- * output is hashed as {@code sourceHash} — so reusing it would both starve this prompt of the
- * structure it needs and make every stored embedding look stale the first time this feature's needs
- * changed a word of it. Different job, different renderer.
+ * <p>The profile block comes from {@link CandidateProfileText}, shared with Story 14.3's summarizer —
+ * see there for why it is not {@code EmbeddingTexts}.
  *
  * <p>Only the candidate's own data is sent. No job title, no description, no employer — see
  * {@link ScreeningAnswerAssistant} for why that omission is load-bearing.
@@ -109,79 +98,10 @@ public class AiScreeningAnswerAssistant
         if (brief == null || brief.question() == null || brief.question().isBlank()) {
             return "";
         }
-        StringBuilder message = new StringBuilder();
-        appendProfile(message, brief.profile());
-        appendIfPresent(message, "Answer type", nameOf(brief.answerType()));
-        appendIfPresent(message, "Question", brief.question());
+        StringBuilder message = new StringBuilder(CandidateProfileText.asLabelledLines(brief.profile()));
+        CandidateProfileText.appendIfPresent(
+                message, "Answer type", CandidateProfileText.nameOf(brief.answerType()));
+        CandidateProfileText.appendIfPresent(message, "Question", brief.question());
         return message.toString();
-    }
-
-    private void appendProfile(StringBuilder message, CandidateProfile profile) {
-        if (profile == null) {
-            return;
-        }
-        appendIfPresent(message, "Headline", profile.getHeadline());
-        appendIfPresent(message, "Location", profile.getLocation());
-        appendIfPresent(message, "Seniority", nameOf(profile.getSeniority()));
-        appendIfPresent(message, "Skills", joined(profile.getSkills()));
-
-        for (Experience experience : nonNull(profile.getExperiences())) {
-            appendIfPresent(message, "Experience", labelled(
-                    experience.getTitle(),
-                    experience.getCompany(),
-                    dateRange(experience.getStartDate(), experience.getEndDate()),
-                    experience.getDescription()));
-        }
-        for (CandidateProject project : nonNull(profile.getProjects())) {
-            appendIfPresent(message, "Project", labelled(project.getName(), project.getDescription()));
-        }
-        // Education is sent even though it cannot pass the eligibility gate on its own: a question
-        // about what someone studied has no other truthful source, and withholding it would make the
-        // assistant decline an answer the profile can actually support.
-        for (Education education : nonNull(profile.getEducations())) {
-            appendIfPresent(message, "Education", labelled(
-                    education.getDegree(), education.getFieldOfStudy(), education.getInstitution()));
-        }
-    }
-
-    private void appendIfPresent(StringBuilder message, String label, String value) {
-        if (value != null && !value.isBlank()) {
-            message.append(label).append(": ").append(value.trim()).append('\n');
-        }
-    }
-
-    private String labelled(String... parts) {
-        return String.join(" · ", presentOnly(parts));
-    }
-
-    private String dateRange(String from, String to) {
-        List<String> present = presentOnly(from, to);
-        return present.isEmpty() ? null : String.join(" to ", present);
-    }
-
-    private List<String> presentOnly(String... parts) {
-        return Arrays.stream(parts)
-                .filter(part -> part != null && !part.isBlank())
-                .map(String::trim)
-                .toList();
-    }
-
-    private String joined(Collection<String> values) {
-        if (values == null) {
-            return null;
-        }
-        return String.join(", ", values.stream()
-                .filter(value -> value != null && !value.isBlank())
-                .map(String::trim)
-                .sorted()
-                .toList());
-    }
-
-    private <T> List<T> nonNull(List<T> values) {
-        return values == null ? List.of() : values.stream().filter(Objects::nonNull).toList();
-    }
-
-    private String nameOf(Enum<?> value) {
-        return value == null ? null : value.name();
     }
 }

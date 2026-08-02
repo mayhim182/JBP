@@ -14,7 +14,7 @@ import com.jbp.service.CandidateProfileService;
 import com.jbp.service.ScreeningAnswerAssistant;
 import com.jbp.service.ScreeningAnswerDraftService;
 import com.jbp.util.AnswerDraftEligibility;
-import com.jbp.util.DraftAnswerBudget;
+import com.jbp.util.PerUserCallBudget;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,7 +30,12 @@ public class ScreeningAnswerDraftServiceImpl implements ScreeningAnswerDraftServ
     private final CurrentUserProvider currentUserProvider;
     private final CandidateProfileService candidateProfileService;
     private final ScreeningAnswerAssistant screeningAnswerAssistant;
-    private final DraftAnswerBudget draftAnswerBudget;
+    /**
+     * Two {@link PerUserCallBudget} beans exist — this one and Story 14.3's summary ceiling — so the
+     * field name is what picks between them: Spring falls back to matching the constructor parameter
+     * against the bean name. <strong>Renaming this field silently swaps in the other allowance.</strong>
+     */
+    private final PerUserCallBudget draftAnswerBudget;
     private final AiCapabilities aiCapabilities;
 
     /**
@@ -58,9 +63,9 @@ public class ScreeningAnswerDraftServiceImpl implements ScreeningAnswerDraftServ
             throw new InsufficientProfileException(NOTHING_TO_DRAFT_FROM);
         }
 
-        if (!draftAnswerBudget.tryReserveDraft(candidateId)) {
+        if (!draftAnswerBudget.tryReserveCall(candidateId)) {
             log.info("Candidate {} has used all {} of their drafts for the current window",
-                    candidateId, draftAnswerBudget.maxDraftsPerWindow());
+                    candidateId, draftAnswerBudget.maxCallsPerWindow());
             throw new RateLimitExceededException(
                     "You've used today's drafts. More tomorrow — you can still write your answers yourself.");
         }
@@ -70,7 +75,7 @@ public class ScreeningAnswerDraftServiceImpl implements ScreeningAnswerDraftServ
                         request.getQuestion(), request.getAnswerType(), profile));
 
         if (drafted.wasUnavailable()) {
-            draftAnswerBudget.refundDraft(candidateId);
+            draftAnswerBudget.refundCall(candidateId);
             log.info("Draft unavailable for candidate {} — allowance refunded", candidateId);
             throw new LlmUnavailableException("The model could not draft this answer", true);
         }
@@ -79,12 +84,12 @@ public class ScreeningAnswerDraftServiceImpl implements ScreeningAnswerDraftServ
             // experience entry that is only a job title, say. Refunded for the same reason a failure
             // is: the candidate received no draft. It is 422 rather than 503 because nothing of ours
             // went wrong, and the dialog must send them to their profile rather than offer a retry.
-            draftAnswerBudget.refundDraft(candidateId);
+            draftAnswerBudget.refundCall(candidateId);
             log.info("Assistant declined to draft for candidate {} — allowance refunded", candidateId);
             throw new InsufficientProfileException(NOTHING_TO_DRAFT_FROM);
         }
 
-        int remaining = draftAnswerBudget.remainingDrafts(candidateId);
+        int remaining = draftAnswerBudget.remainingCalls(candidateId);
         // Length only, never content: a draft is about to be shown to a recruiter under this
         // candidate's name and has no business in a log file.
         log.info("Drafted a {}-character answer for candidate {}, {} drafts remaining",
