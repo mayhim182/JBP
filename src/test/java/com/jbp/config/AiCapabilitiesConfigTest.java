@@ -56,6 +56,7 @@ class AiCapabilitiesConfigTest {
                     .as("unset must behave exactly as before these flags existed")
                     .isTrue();
             assertThat(capabilities.jobDescription()).isTrue();
+            assertThat(capabilities.screeningAnswerAssist()).isTrue();
         });
     }
 
@@ -69,6 +70,23 @@ class AiCapabilitiesConfigTest {
             assertThat(capabilities.matchExplanation())
                     .as("\"the prep questions were poor\" must not take the rest of AI down with it")
                     .isTrue();
+            assertThat(capabilities.jobDescription()).isTrue();
+            assertThat(capabilities.screeningAnswerAssist()).isTrue();
+        });
+    }
+
+    /**
+     * Story 14.2's flag decides whether the apply dialog draws an action row at all, so it has to be
+     * answerable before first paint for the same reason interview prep's is.
+     */
+    @Test
+    void switchesOffScreeningAnswerAssistOnItsOwn() {
+        contextRunner.withPropertyValues(
+                "app.ai.enabled=true",
+                "app.ai.features.screening-answer-assist=false").run(context -> {
+            AiCapabilities capabilities = context.getBean(AiCapabilities.class);
+            assertThat(capabilities.screeningAnswerAssist()).isFalse();
+            assertThat(capabilities.interviewPrep()).isTrue();
             assertThat(capabilities.jobDescription()).isTrue();
         });
     }

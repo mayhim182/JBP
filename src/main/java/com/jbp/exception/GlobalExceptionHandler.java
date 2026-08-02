@@ -68,6 +68,30 @@ public class GlobalExceptionHandler {
                 "AI assist is unavailable right now. Please write this yourself and try again later.");
     }
 
+    /**
+     * The request is well-formed and the caller is allowed to make it — the profile behind it simply
+     * cannot support the answer. 422 rather than 400: nothing about the request needs correcting.
+     *
+     * <p>The message is the service's own, unlike {@link #handleLlmUnavailable}, because it says
+     * which part of the profile is empty and the client renders a link to that part.
+     */
+    @ExceptionHandler(InsufficientProfileException.class)
+    public ResponseEntity<Map<String, Object>> handleInsufficientProfile(InsufficientProfileException ex) {
+        log.info("Request declined for want of profile content: {}", ex.getMessage());
+        return buildResponse(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+    }
+
+    /**
+     * Logged at INFO, not WARN: a user reaching a per-user allowance is the control working, not an
+     * incident. A provider-side rate limit is a different matter and arrives as
+     * {@link LlmUnavailableException}.
+     */
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleRateLimitExceeded(RateLimitExceededException ex) {
+        log.info("Per-user allowance reached: {}", ex.getMessage());
+        return buildResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
         log.warn("Authentication failed: invalid credentials");

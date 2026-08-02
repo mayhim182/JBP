@@ -4,8 +4,11 @@ import com.jbp.dto.ApplicationResponse;
 import com.jbp.dto.ApplicationReviewRequest;
 import com.jbp.dto.ApplicationStatusUpdateRequest;
 import com.jbp.dto.ApplyRequest;
+import com.jbp.dto.DraftAnswerRequest;
+import com.jbp.dto.DraftAnswerResponse;
 import com.jbp.service.CandidateApplicationService;
 import com.jbp.service.RecruiterApplicationService;
+import com.jbp.service.ScreeningAnswerDraftService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +32,7 @@ public class ApplicationController {
 
     private final CandidateApplicationService candidateApplicationService;
     private final RecruiterApplicationService recruiterApplicationService;
+    private final ScreeningAnswerDraftService screeningAnswerDraftService;
 
     // ---- Candidate ----
 
@@ -39,6 +43,25 @@ public class ApplicationController {
             @RequestBody(required = false) ApplyRequest request) {
         log.info("Candidate applying to job {}", jobId);
         return ResponseEntity.status(HttpStatus.CREATED).body(candidateApplicationService.apply(jobId, request));
+    }
+
+    /**
+     * Drafts one screening answer from the signed-in candidate's own profile (Story 14.2).
+     *
+     * <p>Nothing is created or stored — the draft goes into a field the candidate then edits and
+     * submits, or does not. It sits under {@code /applications} rather than {@code /jobs/{id}} on
+     * purpose: the draft never sees the posting, so there is no job in its path.
+     *
+     * <p>Four refusals, each meaning something different to the dialog: 400 for an answer type that
+     * has no trigger, 422 when the profile cannot ground an answer (design 22b G), 429 when the
+     * candidate's daily allowance is spent (22b D), 503 when the model could not be reached (22b F).
+     */
+    @PostMapping("/applications/draft-answer")
+    @PreAuthorize("hasRole('CANDIDATE')")
+    public ResponseEntity<DraftAnswerResponse> draftScreeningAnswer(
+            @Valid @RequestBody DraftAnswerRequest request) {
+        log.info("Drafting a screening answer for the current candidate");
+        return ResponseEntity.ok(screeningAnswerDraftService.draftAnswer(request));
     }
 
     @GetMapping("/applications/mine")

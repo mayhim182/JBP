@@ -5,6 +5,7 @@ import com.jbp.util.CallRateLimiter;
 import com.jbp.util.ControllableClock;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -77,6 +78,6 @@ class RateLimitedEmbeddingClientTest {
     }
 
     private RateLimitedEmbeddingClient clientLimitedTo(FakeEmbeddingClient provider) {
-        return new RateLimitedEmbeddingClient(provider, new CallRateLimiter(LIMIT, clock));
+        return new RateLimitedEmbeddingClient(provider, new CallRateLimiter(LIMIT, Duration.ofMinutes(1), clock));
     }
 }

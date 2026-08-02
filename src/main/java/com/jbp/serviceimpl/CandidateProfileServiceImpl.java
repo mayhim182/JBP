@@ -19,6 +19,7 @@ import com.jbp.service.CandidateProfileService;
 import com.jbp.service.FileStorageService;
 import com.jbp.service.ResumeParser;
 import com.jbp.event.EmbeddingRefreshPublisher;
+import com.jbp.util.AnswerDraftEligibility;
 import com.jbp.util.ProfileCompletenessCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -234,6 +235,7 @@ public class CandidateProfileServiceImpl implements CandidateProfileService {
                 .hasResume(hasText(profile.getResumeKey()))
                 .resumeFileName(profile.getResumeFileName())
                 .completenessPercent(completenessCalculator.calculate(profile))
+                .canDraftAnswers(AnswerDraftEligibility.canGroundADraftedAnswer(profile))
                 .build();
     }
 

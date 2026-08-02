@@ -2,6 +2,8 @@ package com.jbp.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -12,9 +14,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CallRateLimiterTest {
 
     private static final int LIMIT = 3;
+    private static final Duration WINDOW = Duration.ofMinutes(1);
 
     private final ControllableClock clock = new ControllableClock();
-    private final CallRateLimiter rateLimiter = new CallRateLimiter(LIMIT, clock);
+    private final CallRateLimiter rateLimiter = new CallRateLimiter(LIMIT, WINDOW, clock);
 
     @Test
     void allowsCallsUpToTheConfiguredLimit() {
@@ -70,5 +73,66 @@ class CallRateLimiterTest {
     @Test
     void reportsTheConfiguredLimitSoARefusalCanNameIt() {
         assertThat(rateLimiter.maxCallsPerWindow()).isEqualTo(LIMIT);
+    }
+
+    /**
+     * Story 14.2 needs a window measured in hours rather than the minute the provider quotas use.
+     * Asserted against a window this test chooses, so the class cannot quietly go back to a constant.
+     */
+    @Test
+    void honoursAWindowLongerThanAMinute() {
+        CallRateLimiter dailyLimiter = new CallRateLimiter(LIMIT, Duration.ofHours(24), clock);
+        for (int call = 0; call < LIMIT; call++) {
+            dailyLimiter.tryReserveCallSlot();
+        }
+
+        clock.advanceMillis(Duration.ofHours(23).toMillis());
+        assertThat(dailyLimiter.tryReserveCallSlot())
+                .as("still inside the 24-hour window")
+                .isFalse();
+
+        clock.advanceMillis(Duration.ofHours(1).toMillis());
+        assertThat(dailyLimiter.tryReserveCallSlot()).isTrue();
+    }
+
+    @Test
+    void reportsHowManySlotsAreLeft() {
+        assertThat(rateLimiter.remainingCallSlots()).isEqualTo(LIMIT);
+
+        rateLimiter.tryReserveCallSlot();
+
+        assertThat(rateLimiter.remainingCallSlots()).isEqualTo(LIMIT - 1);
+    }
+
+    @Test
+    void reportsNoSlotsLeftRatherThanANegativeNumber() {
+        for (int call = 0; call < LIMIT + 2; call++) {
+            rateLimiter.tryReserveCallSlot();
+        }
+
+        assertThat(rateLimiter.remainingCallSlots()).isZero();
+    }
+
+    /**
+     * Story 14.2's rule that a failed draft costs a candidate nothing. Without this a provider
+     * outage would spend a daily allowance on drafts that were never received.
+     */
+    @Test
+    void givesBackASlotForACallThatMustNotBeCharged() {
+        for (int call = 0; call < LIMIT; call++) {
+            rateLimiter.tryReserveCallSlot();
+        }
+        assertThat(rateLimiter.tryReserveCallSlot()).isFalse();
+
+        rateLimiter.releaseMostRecentCallSlot();
+
+        assertThat(rateLimiter.tryReserveCallSlot()).isTrue();
+    }
+
+    @Test
+    void releasingWithNothingReservedIsHarmless() {
+        rateLimiter.releaseMostRecentCallSlot();
+
+        assertThat(rateLimiter.remainingCallSlots()).isEqualTo(LIMIT);
     }
 }
