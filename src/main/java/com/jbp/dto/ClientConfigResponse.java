@@ -44,5 +44,13 @@ public class ClientConfigResponse {
 
         /** Story 12.1. When false the "Generate with AI" control is shown disabled, per design 17b. */
         private boolean jobDescription;
+
+        /**
+         * Story 14.2. When false the apply dialog renders <em>no</em> action row under a free-text
+         * answer — not a disabled trigger. Design 22b draws seven states and none of them is "the
+         * feature is switched off", so a disabled control here would need copy nobody has written;
+         * the row is simply absent, exactly as it is on a Yes/No question.
+         */
+        private boolean screeningAnswerAssist;
     }
 }

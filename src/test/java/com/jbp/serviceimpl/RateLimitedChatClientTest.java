@@ -5,6 +5,8 @@ import com.jbp.util.CallRateLimiter;
 import com.jbp.util.ControllableClock;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -71,6 +73,6 @@ class RateLimitedChatClientTest {
     }
 
     private RateLimitedChatClient clientLimitedTo(FakeChatCompletionClient provider) {
-        return new RateLimitedChatClient(provider, new CallRateLimiter(LIMIT, clock));
+        return new RateLimitedChatClient(provider, new CallRateLimiter(LIMIT, Duration.ofMinutes(1), clock));
     }
 }

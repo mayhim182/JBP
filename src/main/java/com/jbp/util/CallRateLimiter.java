@@ -6,8 +6,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 
 /**
- * Counts outbound calls inside a sliding one-minute window and reports whether one more is
- * allowed.
+ * Counts calls inside a sliding window and reports whether one more is allowed.
  *
  * <p>Extracted from {@code RateLimitedChatClient} when Story 13.1 added a second transport that
  * needs the identical rule. The window algorithm now exists once; each transport decorator is
@@ -20,7 +19,11 @@ import java.util.Deque;
  * quota-bearing dependency.
  *
  * <p>The window slides rather than resetting on a fixed boundary, which stops a burst spanning
- * two adjacent windows from sending twice the limit.
+ * two adjacent windows from sending twice the limit. That property is why Story 14.2 reuses this
+ * class for a per-candidate daily draft budget rather than writing a calendar-day counter: a
+ * calendar day would let ten drafts at 23:59 be followed by ten more a minute later, and would need
+ * a timezone chosen for every user. The window is a constructor parameter for exactly that reason —
+ * one minute for a provider quota, twenty-four hours for a person's daily allowance.
  *
  * <p>Whether two transports share one instance or hold one each is decided entirely by the
  * wiring in {@code AiClientConfig}, and that is the point of taking the limiter as a
@@ -31,14 +34,14 @@ import java.util.Deque;
  */
 public class CallRateLimiter {
 
-    private static final Duration WINDOW = Duration.ofMinutes(1);
-
     private final int maxCallsPerWindow;
+    private final Duration window;
     private final Clock clock;
     private final Deque<Long> callTimestamps = new ArrayDeque<>();
 
-    public CallRateLimiter(int maxCallsPerWindow, Clock clock) {
+    public CallRateLimiter(int maxCallsPerWindow, Duration window, Clock clock) {
         this.maxCallsPerWindow = maxCallsPerWindow;
+        this.window = window;
         this.clock = clock;
     }
 
@@ -58,13 +61,39 @@ public class CallRateLimiter {
         return true;
     }
 
+    /**
+     * Hands back the slot this caller most recently reserved, for a call that did not happen or
+     * failed in a way the caller must not be charged for.
+     *
+     * <p>Story 14.2's rule that a failed draft must not consume a candidate's daily allowance: a
+     * provider outage would otherwise spend the allowance on nothing, with no way for them to tell
+     * that is what happened. Reserve-then-refund rather than check-then-record, because a bare check
+     * lets two concurrent calls both see the last free slot and both take it.
+     *
+     * <p>Removes the newest timestamp, which is this caller's own unless the same limiter took
+     * another reservation in between. It counts events rather than identifying them, so returning
+     * one of two near-simultaneous timestamps leaves the count correct either way.
+     */
+    public synchronized void releaseMostRecentCallSlot() {
+        callTimestamps.pollLast();
+    }
+
+    /**
+     * How many more calls the window has room for right now. Reported rather than derived by the
+     * caller, which would mean a second copy of the window arithmetic.
+     */
+    public synchronized int remainingCallSlots() {
+        discardCallsOlderThanWindow(clock.millis());
+        return Math.max(0, maxCallsPerWindow - callTimestamps.size());
+    }
+
     /** Exposed so a refusal message can name the limit it hit without restating the number. */
     public int maxCallsPerWindow() {
         return maxCallsPerWindow;
     }
 
     private void discardCallsOlderThanWindow(long now) {
-        long windowStart = now - WINDOW.toMillis();
+        long windowStart = now - window.toMillis();
         while (!callTimestamps.isEmpty() && callTimestamps.peekFirst() <= windowStart) {
             callTimestamps.pollFirst();
         }

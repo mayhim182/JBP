@@ -19,10 +19,13 @@ package com.jbp.config;
  * read in {@link AiClientConfig} and nowhere else — the rule Story 11.1 set and
  * {@link AiTaskBudget} already follows.
  */
-public record AiCapabilities(boolean interviewPrep, boolean matchExplanation, boolean jobDescription) {
+public record AiCapabilities(boolean interviewPrep,
+                             boolean matchExplanation,
+                             boolean jobDescription,
+                             boolean screeningAnswerAssist) {
 
     /** Every capability off — what the client is told when AI is switched off entirely. */
     public static AiCapabilities none() {
-        return new AiCapabilities(false, false, false);
+        return new AiCapabilities(false, false, false, false);
     }
 }

@@ -19,6 +19,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Clock;
+import java.time.Duration;
 
 /**
  * Builds the two transports the rest of the application injects: the {@link ChatCompletionClient}
@@ -56,12 +57,13 @@ public class AiClientConfig {
             @Value("${app.ai.enabled:false}") boolean aiEnabled,
             @Value("${app.ai.features.interview-prep:true}") boolean interviewPrep,
             @Value("${app.ai.features.match-explanation:true}") boolean matchExplanation,
-            @Value("${app.ai.features.job-description:true}") boolean jobDescription) {
+            @Value("${app.ai.features.job-description:true}") boolean jobDescription,
+            @Value("${app.ai.features.screening-answer-assist:true}") boolean screeningAnswerAssist) {
 
         if (!aiEnabled) {
             return AiCapabilities.none();
         }
-        return new AiCapabilities(interviewPrep, matchExplanation, jobDescription);
+        return new AiCapabilities(interviewPrep, matchExplanation, jobDescription, screeningAnswerAssist);
     }
 
     @Bean
@@ -77,7 +79,7 @@ public class AiClientConfig {
         ChatCompletionClient provider = new GeminiChatClient(
                 buildRestTemplate(timeoutMillis), baseUrl, apiKey, model);
         return new LoggingChatClient(new RateLimitedChatClient(
-                provider, new CallRateLimiter(rateLimitPerMinute, Clock.systemUTC())));
+                provider, new CallRateLimiter(rateLimitPerMinute, Duration.ofMinutes(1), Clock.systemUTC())));
     }
 
     @Bean
@@ -115,7 +117,7 @@ public class AiClientConfig {
         EmbeddingClient provider = new GeminiEmbeddingClient(
                 buildRestTemplate(timeoutMillis), baseUrl, apiKey, embeddingModel, embeddingDimensions);
         return new LoggingEmbeddingClient(new RateLimitedEmbeddingClient(
-                provider, new CallRateLimiter(rateLimitPerMinute, Clock.systemUTC())));
+                provider, new CallRateLimiter(rateLimitPerMinute, Duration.ofMinutes(1), Clock.systemUTC())));
     }
 
     @Bean
