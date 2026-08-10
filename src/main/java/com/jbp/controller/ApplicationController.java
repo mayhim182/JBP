@@ -7,9 +7,11 @@ import com.jbp.dto.ApplicationStatusUpdateRequest;
 import com.jbp.dto.ApplyRequest;
 import com.jbp.dto.DraftAnswerRequest;
 import com.jbp.dto.DraftAnswerResponse;
+import com.jbp.dto.DraftedRejectionReason;
 import com.jbp.service.ApplicantSummaryService;
 import com.jbp.service.CandidateApplicationService;
 import com.jbp.service.RecruiterApplicationService;
+import com.jbp.service.RejectionDraftService;
 import com.jbp.service.ScreeningAnswerDraftService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ public class ApplicationController {
     private final RecruiterApplicationService recruiterApplicationService;
     private final ScreeningAnswerDraftService screeningAnswerDraftService;
     private final ApplicantSummaryService applicantSummaryService;
+    private final RejectionDraftService rejectionDraftService;
 
     // ---- Candidate ----
 
@@ -108,6 +111,28 @@ public class ApplicationController {
     public ResponseEntity<ApplicationResponse> openApplication(@PathVariable Long id) {
         log.info("Recruiter opening application {}", id);
         return ResponseEntity.ok(recruiterApplicationService.openApplication(id));
+    }
+
+    /**
+     * Story 14.4 · drafts the rejection the recruiter is about to send, from the job's requirements
+     * and the requirements this application evidenced none of.
+     *
+     * <p><strong>POST rather than GET, and it sends nothing.</strong> It spends a model request and a
+     * slot of the caller's ceiling, so it is not safely repeatable and has no business being cached or
+     * prefetched by anything between here and the browser — the same reason
+     * {@code /applications/draft-answer} is a POST. The rejection itself still travels through
+     * {@code /applications/{id}/status}, which already carries {@code rejectionReason}: composing
+     * first is a client-side change, so the candidate receives one notification that says something
+     * instead of a bare one followed by a second.
+     *
+     * <p>Three refusals: 409 when the application is already decided, 429 above the ceiling, 503 when
+     * nothing could be drafted — design 26 C4, whose copy turns on the fact that nothing has been sent.
+     */
+    @PostMapping("/applications/{id}/draft-rejection")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<DraftedRejectionReason> draftRejectionReason(@PathVariable Long id) {
+        log.debug("Drafting a rejection reason for application {}", id);
+        return ResponseEntity.ok(rejectionDraftService.draftRejectionReason(id));
     }
 
     @PostMapping("/applications/{id}/status")

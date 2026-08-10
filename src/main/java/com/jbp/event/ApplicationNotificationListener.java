@@ -47,6 +47,26 @@ public class ApplicationNotificationListener {
         if (event.newStatus() == ApplicationStatus.REJECTED && event.rejectionReason() != null) {
             return "Your application for '" + jobTitle + "' was not successful: " + event.rejectionReason();
         }
-        return "Your application for '" + jobTitle + "' is now " + event.newStatus() + ".";
+        return "Your application for '" + jobTitle + "' has " + describe(event.newStatus()) + ".";
+    }
+
+    /**
+     * The stage in words a candidate would use. Previously this interpolated the enum directly, so the
+     * message read <em>"is now REJECTED"</em> — shouting a constant at the person it is about.
+     *
+     * <p>Deliberately an exhaustive switch with <strong>no {@code default}</strong>: a new
+     * {@link ApplicationStatus} then fails the build here rather than reaching a candidate as its own
+     * name. That compile error is the point of the method.
+     */
+    private String describe(ApplicationStatus status) {
+        return switch (status) {
+            case APPLIED -> "been received";
+            case VIEWED -> "been viewed by the recruiter";
+            case SHORTLISTED -> "been shortlisted";
+            case INTERVIEW -> "moved to the interview stage";
+            case OFFER -> "reached the offer stage";
+            case REJECTED -> "not been successful";
+            case CLOSED -> "been closed";
+        };
     }
 }

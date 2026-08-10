@@ -60,5 +60,14 @@ public class ClientConfigResponse {
          * Gated on this rather than on a failed fetch, so it never appears and then vanishes.
          */
         private boolean applicantSummary;
+
+        /**
+         * Story 14.4. When false the rejection compose panel loses <em>only its</em>
+         * {@code Draft reason} trigger — design 26 C5. Unlike the flags above, the surface itself
+         * stays: composing before sending is a flow fix the acceptance criteria demand, not an AI
+         * feature, so it must survive the model being switched off. Per design 21b C the trigger's
+         * absence is not explained.
+         */
+        private boolean rejectionDrafting;
     }
 }
