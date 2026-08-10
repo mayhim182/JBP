@@ -58,6 +58,7 @@ class AiCapabilitiesConfigTest {
             assertThat(capabilities.jobDescription()).isTrue();
             assertThat(capabilities.screeningAnswerAssist()).isTrue();
             assertThat(capabilities.applicantSummary()).isTrue();
+            assertThat(capabilities.moderationAssist()).isTrue();
         });
     }
 
@@ -104,6 +105,22 @@ class AiCapabilitiesConfigTest {
             AiCapabilities capabilities = context.getBean(AiCapabilities.class);
             assertThat(capabilities.applicantSummary()).isFalse();
             assertThat(capabilities.screeningAnswerAssist()).isTrue();
+            assertThat(capabilities.interviewPrep()).isTrue();
+        });
+    }
+
+    /**
+     * Story 14.5's flag decides whether the review queue draws risk chips and a sort control at all, so
+     * it has to be answerable before first paint for the same reason interview prep's is.
+     */
+    @Test
+    void switchesOffModerationAssistOnItsOwn() {
+        contextRunner.withPropertyValues(
+                "app.ai.enabled=true",
+                "app.ai.features.moderation-assist=false").run(context -> {
+            AiCapabilities capabilities = context.getBean(AiCapabilities.class);
+            assertThat(capabilities.moderationAssist()).isFalse();
+            assertThat(capabilities.applicantSummary()).isTrue();
             assertThat(capabilities.interviewPrep()).isTrue();
         });
     }

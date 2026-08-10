@@ -60,13 +60,14 @@ public class AiClientConfig {
             @Value("${app.ai.features.job-description:true}") boolean jobDescription,
             @Value("${app.ai.features.screening-answer-assist:true}") boolean screeningAnswerAssist,
             @Value("${app.ai.features.applicant-summary:true}") boolean applicantSummary,
-            @Value("${app.ai.features.rejection-drafting:true}") boolean rejectionDrafting) {
+            @Value("${app.ai.features.rejection-drafting:true}") boolean rejectionDrafting,
+            @Value("${app.ai.features.moderation-assist:true}") boolean moderationAssist) {
 
         if (!aiEnabled) {
             return AiCapabilities.none();
         }
         return new AiCapabilities(interviewPrep, matchExplanation, jobDescription,
-                screeningAnswerAssist, applicantSummary, rejectionDrafting);
+                screeningAnswerAssist, applicantSummary, rejectionDrafting, moderationAssist);
     }
 
     @Bean

@@ -4,6 +4,7 @@ import com.jbp.dto.JobRequest;
 import com.jbp.dto.JobResponse;
 import com.jbp.dto.ScreeningQuestionAnswerCount;
 import com.jbp.dto.ScreeningQuestionDto;
+import com.jbp.event.JobModerationPublisher;
 import com.jbp.mapper.JobMapper;
 import com.jbp.model.Company;
 import com.jbp.model.Job;
@@ -58,7 +59,8 @@ class JobServiceImplScreeningQuestionsTest {
             new JobMapper(),
             Mockito.mock(JobDescriptionGenerator.class),
             Mockito.mock(JobQualityRules.class),
-            Mockito.mock(JobQualityChecker.class));
+            Mockito.mock(JobQualityChecker.class),
+            Mockito.mock(JobModerationPublisher.class));
 
     @Test
     void keepsTheAnswerTypeTheRecruiterChoseForEachQuestion() {

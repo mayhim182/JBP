@@ -7,6 +7,7 @@ import com.jbp.dto.JobRequest;
 import com.jbp.dto.JobResponse;
 import com.jbp.dto.ScreeningQuestionAnswerCount;
 import com.jbp.dto.ScreeningQuestionDto;
+import com.jbp.event.JobModerationPublisher;
 import com.jbp.exception.ConflictException;
 import com.jbp.exception.ResourceNotFoundException;
 import com.jbp.mapper.JobMapper;
@@ -28,6 +29,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -48,6 +50,7 @@ public class JobServiceImpl implements JobService {
     private final JobDescriptionGenerator jobDescriptionGenerator;
     private final JobQualityRules jobQualityRules;
     private final JobQualityChecker jobQualityChecker;
+    private final JobModerationPublisher jobModerationPublisher;
 
     /**
      * Assembles the brief and delegates. Read-only and unsaved: the recruiter may never insert the
@@ -158,8 +161,13 @@ public class JobServiceImpl implements JobService {
 
         // Submit for admin moderation; becomes PUBLISHED only after admin approval (Epic 9).
         job.setStatus(JobStatus.PENDING_MODERATION);
+        // Stamped here rather than on creation — this is the moment the queue starts waiting.
+        job.setSubmittedAt(Instant.now());
         Job submitted = jobRepository.save(job);
         log.info("Job id={} submitted for moderation by recruiter {}", submitted.getId(), recruiterId);
+        // Announced, not performed: the assessment runs after this commits and on another thread, so
+        // the recruiter's submit never waits on a provider call it gains nothing from.
+        jobModerationPublisher.submittedForModeration(submitted.getId());
         return jobMapper.toResponse(submitted);
     }
 
