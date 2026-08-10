@@ -24,10 +24,11 @@ public record AiCapabilities(boolean interviewPrep,
                              boolean jobDescription,
                              boolean screeningAnswerAssist,
                              boolean applicantSummary,
-                             boolean rejectionDrafting) {
+                             boolean rejectionDrafting,
+                             boolean moderationAssist) {
 
     /** Every capability off — what the client is told when AI is switched off entirely. */
     public static AiCapabilities none() {
-        return new AiCapabilities(false, false, false, false, false, false);
+        return new AiCapabilities(false, false, false, false, false, false, false);
     }
 }

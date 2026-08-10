@@ -40,6 +40,7 @@ public class ConfigController {
                         .screeningAnswerAssist(aiCapabilities.screeningAnswerAssist())
                         .applicantSummary(aiCapabilities.applicantSummary())
                         .rejectionDrafting(aiCapabilities.rejectionDrafting())
+                        .moderationAssist(aiCapabilities.moderationAssist())
                         .build())
                 .build());
     }

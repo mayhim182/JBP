@@ -69,5 +69,13 @@ public class ClientConfigResponse {
          * absence is not explained.
          */
         private boolean rejectionDrafting;
+
+        /**
+         * Story 14.5. When false the admin review queue renders <em>no</em> risk chips and no sort
+         * control — design 28 B: the row is title, company, submitted date and actions, exactly as it
+         * ships today. Distinct from a job that is merely unassessed, which does draw a chip; with the
+         * capability off there is nothing to be unassessed against.
+         */
+        private boolean moderationAssist;
     }
 }

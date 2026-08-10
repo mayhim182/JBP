@@ -5,6 +5,7 @@ import com.jbp.dto.AdminUserResponse;
 import com.jbp.dto.AnalyticsResponse;
 import com.jbp.dto.CompanyResponse;
 import com.jbp.dto.JobResponse;
+import com.jbp.dto.PendingJobResponse;
 import com.jbp.service.AdminAnalyticsService;
 import com.jbp.service.AdminCompanyService;
 import com.jbp.service.AdminJobService;
@@ -58,7 +59,7 @@ public class AdminController {
     // ---- 9.2 Job moderation ----
 
     @GetMapping("/jobs/pending")
-    public ResponseEntity<List<JobResponse>> getPendingJobs() {
+    public ResponseEntity<List<PendingJobResponse>> getPendingJobs() {
         return ResponseEntity.ok(adminJobService.getPendingJobs());
     }
 

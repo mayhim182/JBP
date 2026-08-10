@@ -193,7 +193,7 @@ class ScreeningAnswerDraftServiceImplTest {
      * it means.
      */
     private AiCapabilities capabilitiesWithScreeningAnswerAssist(boolean enabled) {
-        return new AiCapabilities(true, true, true, enabled, true, true);
+        return new AiCapabilities(true, true, true, enabled, true, true, true);
     }
 
     private DraftAnswerRequest request(ScreeningQuestionType answerType) {
