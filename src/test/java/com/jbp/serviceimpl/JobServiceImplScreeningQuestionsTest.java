@@ -4,6 +4,7 @@ import com.jbp.dto.JobRequest;
 import com.jbp.dto.JobResponse;
 import com.jbp.dto.ScreeningQuestionAnswerCount;
 import com.jbp.dto.ScreeningQuestionDto;
+import com.jbp.event.EmbeddingRefreshPublisher;
 import com.jbp.event.JobModerationPublisher;
 import com.jbp.mapper.JobMapper;
 import com.jbp.model.Company;
@@ -19,6 +20,7 @@ import com.jbp.repository.JobRepository;
 import com.jbp.security.CurrentUserProvider;
 import com.jbp.service.CompanyService;
 import com.jbp.service.JobDescriptionGenerator;
+import com.jbp.service.JobDuplicateDetector;
 import com.jbp.service.JobQualityChecker;
 import com.jbp.util.JobQualityRules;
 import org.junit.jupiter.api.Test;
@@ -60,7 +62,9 @@ class JobServiceImplScreeningQuestionsTest {
             Mockito.mock(JobDescriptionGenerator.class),
             Mockito.mock(JobQualityRules.class),
             Mockito.mock(JobQualityChecker.class),
-            Mockito.mock(JobModerationPublisher.class));
+            Mockito.mock(JobModerationPublisher.class),
+            Mockito.mock(EmbeddingRefreshPublisher.class),
+            Mockito.mock(JobDuplicateDetector.class));
 
     @Test
     void keepsTheAnswerTypeTheRecruiterChoseForEachQuestion() {

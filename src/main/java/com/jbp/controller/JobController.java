@@ -1,5 +1,6 @@
 package com.jbp.controller;
 
+import com.jbp.dto.DuplicateCheck;
 import com.jbp.dto.GeneratedJobDescription;
 import com.jbp.dto.JobDescriptionRequest;
 import com.jbp.dto.JobQualityFinding;
@@ -107,6 +108,16 @@ public class JobController {
     public ResponseEntity<List<JobQualityFinding>> checkQualityWithAi(@PathVariable Long id) {
         log.info("Running AI quality review for job id={}", id);
         return ResponseEntity.ok(jobService.checkQualityWithAi(id));
+    }
+
+    /**
+     * Story 14.6. A GET because it computes nothing and stores nothing — unlike the quality checks
+     * above, which spend a model call and are POSTs for that reason.
+     */
+    @GetMapping("/{id}/duplicates")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<DuplicateCheck> checkDuplicates(@PathVariable Long id) {
+        return ResponseEntity.ok(jobService.checkDuplicates(id));
     }
 
     @PutMapping("/{id}")

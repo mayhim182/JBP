@@ -4,8 +4,8 @@ import com.jbp.dto.AdminRejectRequest;
 import com.jbp.dto.AdminUserResponse;
 import com.jbp.dto.AnalyticsResponse;
 import com.jbp.dto.CompanyResponse;
+import com.jbp.dto.AdminJobResponse;
 import com.jbp.dto.JobResponse;
-import com.jbp.dto.PendingJobResponse;
 import com.jbp.service.AdminAnalyticsService;
 import com.jbp.service.AdminCompanyService;
 import com.jbp.service.AdminJobService;
@@ -59,8 +59,17 @@ public class AdminController {
     // ---- 9.2 Job moderation ----
 
     @GetMapping("/jobs/pending")
-    public ResponseEntity<List<PendingJobResponse>> getPendingJobs() {
+    public ResponseEntity<List<AdminJobResponse>> getPendingJobs() {
         return ResponseEntity.ok(adminJobService.getPendingJobs());
+    }
+
+    /**
+     * One posting at any status except DRAFT — what a duplicate notice links to. See
+     * {@link AdminJobService#getJob} for why drafts are excluded rather than filtered.
+     */
+    @GetMapping("/jobs/{id}")
+    public ResponseEntity<AdminJobResponse> getJob(@PathVariable Long id) {
+        return ResponseEntity.ok(adminJobService.getJob(id));
     }
 
     @PostMapping("/jobs/{id}/approve")
