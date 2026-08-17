@@ -23,6 +23,16 @@ public interface JobRepository extends JpaRepository<Job, Long> {
     Page<Job> findByStatus(JobStatus status, Pageable pageable);
 
     /**
+     * Every posting belonging to any of these companies, in one query.
+     *
+     * <p>Unfiltered by status on purpose: Story 14.6 must be able to say "this resembles a role you
+     * closed last year", and restricting to PUBLISHED would hide exactly the case a recruiter is most
+     * likely to be recreating by accident. Batched by company rather than fetched per job so that
+     * checking a whole moderation queue costs the same one query as checking a single row.
+     */
+    List<Job> findByCompanyIdIn(Collection<Long> companyIds);
+
+    /**
      * The jobs among {@code ids} that are in the given status — one query for a whole page of
      * scores.
      *

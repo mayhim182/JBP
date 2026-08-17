@@ -1,6 +1,6 @@
 package com.jbp.serviceimpl;
 
-import com.jbp.dto.PendingJobResponse;
+import com.jbp.dto.AdminJobResponse;
 import com.jbp.event.EmbeddingRefreshPublisher;
 import com.jbp.mapper.JobMapper;
 import com.jbp.model.Company;
@@ -12,13 +12,16 @@ import com.jbp.model.ModerationRisk;
 import com.jbp.model.User;
 import com.jbp.model.VerificationStatus;
 import com.jbp.repository.JobRepository;
+import com.jbp.service.JobDuplicateDetector;
 import com.jbp.service.NotificationService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,11 +35,20 @@ class AdminJobServiceImplQueueOrderTest {
 
     private final JobRepository jobRepository = Mockito.mock(JobRepository.class);
 
+    private final JobDuplicateDetector jobDuplicateDetector = Mockito.mock(JobDuplicateDetector.class);
+
     private final AdminJobServiceImpl service = new AdminJobServiceImpl(
             jobRepository,
             new JobMapper(),
             Mockito.mock(NotificationService.class),
-            Mockito.mock(EmbeddingRefreshPublisher.class));
+            Mockito.mock(EmbeddingRefreshPublisher.class),
+            jobDuplicateDetector);
+
+    @BeforeEach
+    void givenNoDuplicatesAnywhere() {
+        // Story 14.6's own behaviour has its own test; here it must not disturb the ranking.
+        Mockito.when(jobDuplicateDetector.checkAll(Mockito.any())).thenReturn(Map.of());
+    }
 
     @Test
     void ranksTheQueueByRiskWithCheckedAndCleanLast() {
@@ -47,7 +59,7 @@ class AdminJobServiceImplQueueOrderTest {
                 job(1L, ModerationRisk.HIGH));
 
         assertThat(service.getPendingJobs())
-                .extracting(PendingJobResponse::id)
+                .extracting(AdminJobResponse::id)
                 .containsExactly(1L, 2L, 3L, 4L);
     }
 
@@ -60,7 +72,7 @@ class AdminJobServiceImplQueueOrderTest {
         givenPending(job(1L, null), job(2L, ModerationRisk.MEDIUM));
 
         assertThat(service.getPendingJobs())
-                .extracting(PendingJobResponse::id)
+                .extracting(AdminJobResponse::id)
                 .containsExactly(2L, 1L);
     }
 
@@ -70,7 +82,7 @@ class AdminJobServiceImplQueueOrderTest {
         givenPending(job(1L, ModerationRisk.NONE), job(2L, null));
 
         assertThat(service.getPendingJobs())
-                .extracting(PendingJobResponse::id)
+                .extracting(AdminJobResponse::id)
                 .containsExactly(2L, 1L);
     }
 
@@ -84,7 +96,7 @@ class AdminJobServiceImplQueueOrderTest {
         givenPending(job(5L, null), job(9L, null), job(2L, null));
 
         assertThat(service.getPendingJobs())
-                .extracting(PendingJobResponse::id)
+                .extracting(AdminJobResponse::id)
                 .containsExactly(5L, 9L, 2L);
     }
 

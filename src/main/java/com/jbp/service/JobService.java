@@ -1,5 +1,6 @@
 package com.jbp.service;
 
+import com.jbp.dto.DuplicateCheck;
 import com.jbp.dto.GeneratedJobDescription;
 import com.jbp.dto.JobDescriptionRequest;
 import com.jbp.dto.JobQualityFinding;
@@ -36,6 +37,16 @@ public interface JobService {
      * rules have already given the recruiter something to act on.
      */
     List<JobQualityFinding> checkQualityWithAi(Long jobId);
+
+    /**
+     * Postings by the same company that closely resemble this one — Story 14.6. Owner-only, nothing is
+     * stored, and it never blocks anything: duplicates are permitted, and re-posting a closed role is
+     * legitimate.
+     *
+     * <p>Its own call rather than part of the save response. A save returns {@link JobResponse}, which
+     * guests receive, and a comparison inside the save path could delay or fail the save.
+     */
+    DuplicateCheck checkDuplicates(Long jobId);
 
     JobResponse updateJob(Long id, JobRequest request);
 

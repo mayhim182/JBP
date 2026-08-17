@@ -1,7 +1,9 @@
 package com.jbp.serviceimpl;
 
+import com.jbp.dto.AdminJobResponse;
+import com.jbp.dto.DuplicateCheck;
+import com.jbp.dto.DuplicateJob;
 import com.jbp.dto.JobResponse;
-import com.jbp.dto.PendingJobResponse;
 import com.jbp.exception.ConflictException;
 import com.jbp.exception.ResourceNotFoundException;
 import com.jbp.mapper.JobMapper;
@@ -12,6 +14,7 @@ import com.jbp.model.NotificationType;
 import com.jbp.repository.JobRepository;
 import com.jbp.event.EmbeddingRefreshPublisher;
 import com.jbp.service.AdminJobService;
+import com.jbp.service.JobDuplicateDetector;
 import com.jbp.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -27,16 +31,17 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class AdminJobServiceImpl implements AdminJobService {
 
-    private static final Comparator<PendingJobResponse> HIGHEST_RISK_FIRST =
+    private static final Comparator<AdminJobResponse> HIGHEST_RISK_FIRST =
             Comparator.comparingInt(AdminJobServiceImpl::queueRankOf);
 
     private final JobRepository jobRepository;
     private final JobMapper jobMapper;
     private final NotificationService notificationService;
     private final EmbeddingRefreshPublisher embeddingRefreshPublisher;
+    private final JobDuplicateDetector jobDuplicateDetector;
 
     /** An unassessed job sorts between MEDIUM and NONE — see {@link ModerationRisk}. */
-    private static int queueRankOf(PendingJobResponse entry) {
+    private static int queueRankOf(AdminJobResponse entry) {
         return entry.moderation() == null
                 ? ModerationRisk.UNASSESSED_QUEUE_RANK
                 : entry.moderation().risk().queueRank();
@@ -51,11 +56,31 @@ public class AdminJobServiceImpl implements AdminJobService {
      * one.
      */
     @Override
-    public List<PendingJobResponse> getPendingJobs() {
-        return jobRepository.findByStatus(JobStatus.PENDING_MODERATION).stream()
-                .map(jobMapper::toPendingResponse)
+    public List<AdminJobResponse> getPendingJobs() {
+        List<Job> pending = jobRepository.findByStatus(JobStatus.PENDING_MODERATION);
+        // One batch for the whole queue rather than a check per row — see JobDuplicateDetector.
+        Map<Long, DuplicateCheck> duplicateChecks = jobDuplicateDetector.checkAll(pending);
+        return pending.stream()
+                .map(job -> jobMapper.toAdminResponse(job, duplicatesFor(duplicateChecks, job)))
                 .sorted(HIGHEST_RISK_FIRST)
                 .toList();
+    }
+
+    @Override
+    public AdminJobResponse getJob(Long jobId) {
+        Job job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Job not found with id: " + jobId));
+        if (job.getStatus() == JobStatus.DRAFT) {
+            // Not found rather than forbidden: a draft's existence is itself the recruiter's business.
+            log.debug("Admin asked for job {}, which is a draft — reporting it as absent", jobId);
+            throw new ResourceNotFoundException("Job not found with id: " + jobId);
+        }
+        return jobMapper.toAdminResponse(job, jobDuplicateDetector.check(job).duplicates());
+    }
+
+    /** A row the detector could not assess reads the same as one with nothing to report. */
+    private static List<DuplicateJob> duplicatesFor(Map<Long, DuplicateCheck> checks, Job job) {
+        return checks.getOrDefault(job.getId(), DuplicateCheck.notAssessable()).duplicates();
     }
 
     @Override
@@ -65,9 +90,11 @@ public class AdminJobServiceImpl implements AdminJobService {
         job.setStatus(JobStatus.PUBLISHED);
         jobRepository.save(job);
         log.info("Job {} approved and published by admin", jobId);
-        // Here rather than in JobServiceImpl.publishJob, which only submits for moderation: a job that
-        // is never approved is never searchable, so embedding it there would spend free-tier quota on
-        // vectors nothing can ever match against.
+        // Kept after Story 14.6 moved the first embedding to submission time, because it costs nothing
+        // to keep: EmbeddingStore re-embeds only when the source text has actually changed, and a job
+        // cannot be edited between submission and approval (updateJob is DRAFT-only). So this is a hash
+        // comparison in the normal case, and the safety net for any job that reaches PUBLISHED without
+        // having passed through publishJob.
         embeddingRefreshPublisher.jobChanged(jobId);
         notificationService.createNotification(job.getCompany().getOwner().getId(), NotificationType.JOB_MODERATION,
                 "Your job '" + job.getTitle() + "' has been approved and published.");

@@ -1,5 +1,6 @@
 package com.jbp.serviceimpl;
 
+import com.jbp.dto.DuplicateCheck;
 import com.jbp.dto.GeneratedJobDescription;
 import com.jbp.dto.JobDescriptionRequest;
 import com.jbp.dto.JobQualityFinding;
@@ -7,6 +8,7 @@ import com.jbp.dto.JobRequest;
 import com.jbp.dto.JobResponse;
 import com.jbp.dto.ScreeningQuestionAnswerCount;
 import com.jbp.dto.ScreeningQuestionDto;
+import com.jbp.event.EmbeddingRefreshPublisher;
 import com.jbp.event.JobModerationPublisher;
 import com.jbp.exception.ConflictException;
 import com.jbp.exception.ResourceNotFoundException;
@@ -20,6 +22,7 @@ import com.jbp.repository.JobRepository;
 import com.jbp.security.CurrentUserProvider;
 import com.jbp.service.CompanyService;
 import com.jbp.service.JobDescriptionGenerator;
+import com.jbp.service.JobDuplicateDetector;
 import com.jbp.service.JobQualityChecker;
 import com.jbp.service.JobService;
 import com.jbp.util.JobQualityRules;
@@ -51,6 +54,8 @@ public class JobServiceImpl implements JobService {
     private final JobQualityRules jobQualityRules;
     private final JobQualityChecker jobQualityChecker;
     private final JobModerationPublisher jobModerationPublisher;
+    private final EmbeddingRefreshPublisher embeddingRefreshPublisher;
+    private final JobDuplicateDetector jobDuplicateDetector;
 
     /**
      * Assembles the brief and delegates. Read-only and unsaved: the recruiter may never insert the
@@ -87,6 +92,16 @@ public class JobServiceImpl implements JobService {
     public List<JobQualityFinding> checkQualityWithRules(Long jobId) {
         Job job = findOwnJobOrThrow(jobId);
         return jobQualityRules.check(job);
+    }
+
+    /**
+     * Its own call rather than part of the save response (Story 14.6). {@link JobResponse} is served to
+     * guests, so a duplicate notice could not ride it for the same reason Story 14.5's risk could not;
+     * and a comparison inside the save path could delay or fail the save, which "advisory only" forbids.
+     */
+    @Override
+    public DuplicateCheck checkDuplicates(Long jobId) {
+        return jobDuplicateDetector.check(findOwnJobOrThrow(jobId));
     }
 
     @Override
@@ -168,6 +183,12 @@ public class JobServiceImpl implements JobService {
         // Announced, not performed: the assessment runs after this commits and on another thread, so
         // the recruiter's submit never waits on a provider call it gains nothing from.
         jobModerationPublisher.submittedForModeration(submitted.getId());
+        // Embedded at submission rather than at approval (Story 14.6). Approval was the right moment
+        // while a vector's only use was search — an unapproved job is never searchable, so embedding it
+        // earlier bought nothing. Duplicate detection inverts that: it has to compare a posting to its
+        // siblings *before* an admin decides, so a vector that only appears on approval can never fire.
+        // The cost is one embedding for a job that is later rejected, which submission already gates.
+        embeddingRefreshPublisher.jobChanged(submitted.getId());
         return jobMapper.toResponse(submitted);
     }
 
